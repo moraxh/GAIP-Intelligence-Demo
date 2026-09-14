@@ -6,8 +6,7 @@ import {
   AlertTriangle, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronLeft,
   ChevronRight, Database, FileStack, Filter, Gauge, Lock,
   MapPin, NotebookPen, Search, TrendingUp, Users, X, ArrowRight, ThumbsDown, ThumbsUp,
-  Building2, Wallet, HardHat, UserRound, Bot, Send, MessageCircle, RotateCcw,
-  BrainCircuit, Target, Layers3, ShieldAlert,
+  Building2, Wallet, HardHat, UserRound, MessageCircle, RotateCcw, Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   carga, fuentes, hitos, historicoResumen, licitaciones, notas, oferta, ofertas,
   porEntidad, stages, type Estado, type Licitacion,
@@ -24,7 +24,7 @@ type View = 'panorama' | 'licitaciones' | 'ofertas' | 'detalle';
 type ChatKey = 'vence' | 'avance' | 'oferta' | 'cruce';
 type ModelContext = { registerTool: (tool: Record<string, unknown>, options?: { signal?: AbortSignal }) => void | Promise<void> };
 
-// --- Fuentes conectadas: apagar/prender reconfigura el panorama en vivo. ---
+// --- Datos visibles del panorama en esta demostración. ---
 // Pieza 1 del Plan_Demo_v2.md — cada widget del panorama depende de una fuente concreta.
 type FuenteKey = 'comprasmx' | 'gantt' | 'ofertas' | 'historico';
 type FuentesActivas = Record<FuenteKey, boolean>;
@@ -199,11 +199,12 @@ export default function Home() {
 
   return (
     <main className="app-shell">
+      <a className="skip-link" href="#main-content">Saltar al contenido</a>
       <ModuleBar activo={moduloActivo} onLicitaciones={() => navigate('panorama')} onGris={(key) => setModuloAbierto(key)} />
       {modulosGris && <GraySourceDialog label={modulosGris.label} hoy={modulosGris.hoy} con={modulosGris.con} onClose={() => setModuloAbierto(null)} />}
       <aside className="sidebar">
         <div className="brand-lockup">
-          <Image src="/gaip-logo.png" alt="GAIP — Gerenciación, Administración e Ingeniería de Proyectos" width={184} height={75} priority />
+          <Image src="/gaip-logo.png" alt="GAIP — Gerenciación, Administración e Ingeniería de Proyectos" width={184} height={75} unoptimized priority />
           <span className="brand-product">Intelligence</span>
         </div>
         <nav aria-label="Navegación principal">
@@ -229,7 +230,7 @@ export default function Home() {
         </div>
       </aside>
 
-      <section className="workspace">
+      <section className="workspace" id="main-content" tabIndex={-1}>
         <header className="topbar">
           <div>
             <div className="eyebrow">INTELIGENCIA OPERATIVA</div>
@@ -237,8 +238,8 @@ export default function Home() {
           </div>
           <div className="top-actions">
             <div className="data-status">
-              <span className="data-mark"><CheckCircle2 /></span>
-              <div className="data-status-copy"><strong>Actualizado</strong><time>{fuentes.corte}</time></div>
+              <span className="data-mark"><CalendarDays /></span>
+              <div className="data-status-copy"><strong>Corte de datos</strong><time>{fuentes.corte}</time></div>
             </div>
           </div>
         </header>
@@ -264,7 +265,7 @@ export default function Home() {
         </div>
       </section>
 
-      <button className="assistant-fab" onClick={() => setChatOpen(true)} aria-label="Abrir asistente operativo"><MessageCircle /><span>Preguntar a la IA</span></button>
+      <button className="assistant-fab" onClick={() => setChatOpen(true)} aria-label="Abrir consultas operativas"><MessageCircle /><span>Consultas operativas</span></button>
       <IntelligencePanel open={chatOpen} onOpenChange={setChatOpen} onDetail={openDetail} />
     </main>
   );
@@ -275,7 +276,7 @@ type Licitation = Licitacion;
 // --- Pieza 5: barra de módulos de empresa. Encuadra Licitaciones como UN módulo, no el producto. ---
 function ModuleBar({ activo, onLicitaciones, onGris }: { activo: ModuloKey; onLicitaciones: () => void; onGris: (key: string) => void }) {
   const modulos: ModuloKey[] = ['licitaciones', 'rh', 'finanzas', 'obra'];
-  return <div className="module-bar" aria-label="Módulos de la empresa">
+  return <nav className="module-bar" aria-label="Módulos de la empresa">
     <span className="module-bar-label">GAIP ·</span>
     <div className="module-bar-list">
       {modulos.map((key) => {
@@ -286,38 +287,45 @@ function ModuleBar({ activo, onLicitaciones, onGris }: { activo: ModuloKey; onLi
         return <button
           key={key}
           className={`module-pill ${conectado ? 'on' : 'off'} ${isActive ? 'active' : ''}`}
+          aria-current={isActive ? 'page' : undefined}
+          aria-haspopup={conectado ? undefined : 'dialog'}
+          title={conectado ? undefined : 'Vista de demostración: módulo no conectado'}
           onClick={onClick}
         ><info.icon />{info.label}{!conectado && <Lock className="module-pill-lock" />}</button>;
       })}
     </div>
-  </div>;
+  </nav>;
 }
 
 // Diálogo "no conectado — qué se desbloquea": lo comparten el mapa de fuentes (Pieza 4)
 // y la barra de módulos de empresa (Pieza 5). Misma regla: nunca una cifra simulada.
 function GraySourceDialog({ label, hoy, con, onClose }: { label: string; hoy: string; con: string; onClose: () => void }) {
-  return <dialog open className="gray-source-overlay" aria-label={`No conectado: ${label}`}>
-    <div className="gray-source-panel">
-      <div className="gray-source-panel-head"><Lock /><strong>{label}: no conectado</strong><button aria-label="Cerrar" onClick={onClose}><X /></button></div>
+  return <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <DialogContent className="gray-source-panel" showCloseButton={false}>
+      <DialogHeader className="gray-source-panel-head">
+        <Lock aria-hidden="true" />
+        <DialogTitle>{label}: no conectado</DialogTitle>
+        <DialogClose className="gray-source-close" aria-label="Cerrar"><X /><span className="sr-only">Cerrar</span></DialogClose>
+      </DialogHeader>
       <p className="gray-source-today">{hoy}</p>
-      <p className="gray-source-would">{con}</p>
-    </div>
-  </dialog>;
+      <DialogDescription className="gray-source-would">{con}</DialogDescription>
+    </DialogContent>
+  </Dialog>;
 }
 
 function FuentesToggleBar({ fuentesActivas, onToggle }: { fuentesActivas: FuentesActivas; onToggle: (key: FuenteKey) => void }) {
   const keys: FuenteKey[] = ['comprasmx', 'gantt', 'ofertas', 'historico'];
   const activeCount = keys.filter((k) => fuentesActivas[k]).length;
-  return <section className="fuentes-toggle-bar" aria-label="Fuentes conectadas al panorama">
-    <div className="fuentes-toggle-label"><span className="source-status-icon"><Database /></span><span><strong>Fuentes de información</strong><small>{activeCount} de {keys.length} conectadas</small></span></div>
+  return <section className="fuentes-toggle-bar" aria-label="Datos visibles en el panorama">
+    <div className="fuentes-toggle-label"><span className="source-status-icon"><Database /></span><span><strong>Datos que se muestran</strong><small>Demostración · {activeCount} de {keys.length} fuentes visibles</small></span></div>
     <div className="fuentes-toggle-list">
       {keys.map((key) => <button
         key={key}
         className={`fuente-toggle ${fuentesActivas[key] ? 'on' : 'off'}`}
         aria-pressed={fuentesActivas[key]}
-        aria-label={`${fuenteInfo[key].corto}: ${fuentesActivas[key] ? 'conectada' : 'desconectada'}`}
+        aria-label={`${fuentesActivas[key] ? 'Ocultar' : 'Mostrar'} datos de ${fuenteInfo[key].corto}`}
         onClick={() => onToggle(key)}
-      ><span className="fuente-toggle-dot" />{fuenteInfo[key].corto}<span className="fuente-toggle-state">{fuentesActivas[key] ? 'Activa' : 'Inactiva'}</span></button>)}
+      ><span className="fuente-toggle-dot" />{fuenteInfo[key].corto}<span className="fuente-toggle-state">{fuentesActivas[key] ? 'Visible' : 'Oculta'}</span></button>)}
     </div>
   </section>;
 }
@@ -352,13 +360,17 @@ function Dashboard({ fuentesActivas, onToggle, onAll, onDetail }: { fuentesActiv
 
     <FuentesToggleBar fuentesActivas={fuentesActivas} onToggle={onToggle} />
 
-    <section className="consolidation-story" aria-label="Estado del corte operativo">
+    {fuentesActivas.comprasmx ? <section className="consolidation-story" aria-label="Estado del corte operativo">
       <div className="story-intro"><span>ESTADO DEL CORTE</span><strong><b>{fuentes.totalProcesosUnicos}</b> procesos únicos</strong><small>Consolidados desde {fuentes.totalListasOrigen} listas de origen</small></div>
       <div className="story-step"><div><span>Registros recibidos</span><strong>{fuentes.totalRegistrosRecibidos}</strong><small>en el corte actual</small></div></div>
       <div className="story-step"><div><span>Duplicados detectados</span><strong>{fuentes.totalDuplicados}</strong><small>conciliados automáticamente</small></div></div>
       <div className="story-step featured"><div><span>Cobertura</span><strong>{Math.round((fuentes.totalProcesosUnicos / fuentes.totalRegistrosRecibidos) * 100)}%</strong><small>de registros únicos</small></div></div>
       {hitoDestacado && <button onClick={() => onDetail(hitoDestacado)}><span className="story-alert-icon"><AlertTriangle /></span><div><small>REQUIERE ATENCIÓN</small><strong>{hitos.length} hitos próximos</strong><span>Revisar prioridades del corte</span></div><ChevronRight /></button>}
-    </section>
+    </section> : <section className="source-off-message" aria-live="polite">
+      <Database aria-hidden="true" />
+      <div><strong>ComprasMX está oculta en esta vista</strong><span>Activa sus datos para consultar el directorio, los hitos y el resumen del corte.</span></div>
+      <Button variant="outline" onClick={() => onToggle('comprasmx')}>Mostrar datos de ComprasMX</Button>
+    </section>}
 
     <section className="metric-grid">
       {metrics.map((metric) => fuentesActivas[metric.fuente]
@@ -366,23 +378,27 @@ function Dashboard({ fuentesActivas, onToggle, onAll, onDetail }: { fuentesActiv
         : <Card className="executive-metric locked" key={metric.label}><CardHeader><div className="metric-glyph"><Lock /></div><span>{metric.label}</span></CardHeader><CardContent><strong className="locked-value">···</strong><p>Requiere {fuenteInfo[metric.fuente].label}</p></CardContent></Card>)}
     </section>
 
-    <AiExecutiveInsights fuentesActivas={fuentesActivas} onDetail={onDetail} />
+    {fuentesActivas.comprasmx && <AiExecutiveInsights fuentesActivas={fuentesActivas} onDetail={onDetail} />}
 
     <section className="dashboard-card-columns">
       <div className="dashboard-card-column">
+        {fuentesActivas.comprasmx ? <>
         <Card className="executive-card pipeline-card"><CardHeader><div><CardTitle>Portafolio por etapa</CardTitle><p>Conteo de registros en listas de origen por etapa</p></div><Button variant="ghost" size="sm" onClick={onAll}>Abrir listado</Button></CardHeader><CardContent><div className="pipeline-chart">{stages.map((stage) => <div className="pipeline-row" key={stage.label}><div><span>{stage.label}</span><strong>{stage.value}</strong></div><div className="pipeline-bar"><i style={{ width:`${Math.max(12, stage.value * 2.25)}%`, background:stage.color }} /></div></div>)}</div><div className="portfolio-note"><Database /><span>Los conteos pueden incluir procesos presentes en más de una lista.</span></div></CardContent></Card>
         <Card className="executive-card entity-card"><CardHeader><div><CardTitle>Procesos por entidad</CardTitle><p>Muestra operativa disponible</p></div><MapPin /></CardHeader><CardContent><div className="bar-chart">{entityBars.map((bar) => <div className="bar-row" key={bar.name}><span>{bar.name}</span><div><i style={{ width:`${(bar.value / entityBars[0].value) * 100}%` }} /></div><strong>{bar.value}</strong></div>)}</div></CardContent></Card>
+        </> : <LockedWidget fuente="comprasmx" />}
         {fuentesActivas.historico && <HistoricoAnalisis />}
       </div>
       <div className="dashboard-card-column">
-        <Card className="executive-card milestones-card"><CardHeader><div><CardTitle>Decisiones al corte</CardTitle><p>Prioridad calculada al {fuentes.corte}</p></div><span className="verified-label"><CheckCircle2 /> Verificado</span></CardHeader><CardContent><div className="deadline-list">{hitos.map((hito) => { const item = licitacionPorId(hito.id); const [dia, mes] = hito.fecha.split(' '); return <button className="deadline" key={item.id} onClick={() => onDetail(item)}><div className="date risk"><strong>{dia}</strong><span>{mes.toUpperCase()}</span></div><div><strong>Revisar fallo · {item.dependencia}</strong><span>{item.nombre}</span></div><ChevronRight /></button>; })}</div></CardContent></Card>
+        {fuentesActivas.comprasmx ? <>
+        <Card className="executive-card milestones-card"><CardHeader><div><CardTitle>Próximos fallos</CardTitle><p>Fechas reportadas al corte {fuentes.corte}</p></div><CalendarDays /></CardHeader><CardContent><div className="deadline-list">{hitos.map((hito) => { const item = licitacionPorId(hito.id); const [dia, mes] = hito.fecha.split(' '); return <button className="deadline" key={item.id} onClick={() => onDetail(item)}><div className="date risk"><strong>{dia}</strong><span>{mes.toUpperCase()}</span></div><div><strong>{item.dependencia}</strong><span>{item.nombre}</span></div><ChevronRight /></button>; })}</div></CardContent></Card>
+        </> : <LockedWidget fuente="comprasmx" />}
         {fuentesActivas.gantt
           ? <Card className="executive-card workload-card"><CardHeader><div><CardTitle>Avance por responsable</CardTitle><p>Promedio de tareas asignadas · fuente: Excel de Gantt</p></div><Users /></CardHeader><CardContent><div className="workload-list">{carga.map((person) => <div className="workload" key={person.nombre}><div><strong>{person.nombre}</strong><span>{person.asignaciones} tareas</span></div><b>{person.avance}%</b><Progress value={person.avance} /></div>)}</div></CardContent></Card>
           : <LockedWidget fuente="gantt" />}
       </div>
     </section>
 
-    {fuentesActivas.gantt && <CapacidadVsDemanda onDetail={onDetail} />}
+    {fuentesActivas.gantt && fuentesActivas.comprasmx && <CapacidadVsDemanda onDetail={onDetail} />}
 
     {notas.length > 0 && fuentesActivas.gantt && <section className="notes-section" aria-label="Notas capturadas">
       <details className="notes-disclosure">
@@ -404,22 +420,35 @@ function Dashboard({ fuentesActivas, onToggle, onAll, onDetail }: { fuentesActiv
 // Cuando exista el servicio de IA, esta superficie puede conservarse y sustituir solo la narrativa.
 function AiExecutiveInsights({ fuentesActivas, onDetail }: { fuentesActivas: FuentesActivas; onDetail: (item: Licitacion) => void }) {
   const alerta = licitacionPorId('XLS-SIOPESMA0BLP05692026');
+  const primerFallo = hitos[0]?.fecha ?? 'próximamente';
+  const expedienteProximo = hitos[0] ? licitacionPorId(hitos[0].id) : undefined;
+  const titulo = fuentesActivas.gantt
+    ? 'Puerto Vallarta vence el 17 de septiembre.'
+    : `El primer fallo está fechado para el ${primerFallo}.`;
   return <section className="ai-insights" aria-labelledby="ai-insights-title">
     <div className="ai-briefing">
       <div className="ai-briefing-heading">
-        <span className="ai-mark"><BrainCircuit /></span>
-        <div><span className="ai-kicker">LECTURA EJECUTIVA</span><h3 id="ai-insights-title">La prioridad no es captar más procesos, sino proteger la ejecución cercana.</h3></div>
+        <div className="briefing-meta"><span>Nota de licitaciones</span><time>{fuentes.corte}</time></div>
+        <h3 id="ai-insights-title">{titulo}</h3>
       </div>
-      <p>El corte reúne <strong>64 procesos únicos</strong> y cinco fallos fechados. La señal más urgente es Puerto Vallarta: el fallo está programado para el <strong>17 de septiembre</strong> y las ocho tareas registradas siguen en 0%. En paralelo, el portafolio muestra una concentración operativa importante en construcción y en dos entidades.</p>
-      <div className="ai-briefing-footer"><span><Database /> ComprasMX · corte 10 sep 2026</span><button onClick={() => onDetail(alerta)}>Revisar expediente <ChevronRight /></button></div>
+      <p>{fuentesActivas.gantt
+        ? <>El expediente registra <strong>ocho tareas sin iniciar</strong>. Confirma responsables y vigencia del calendario antes de reasignar trabajo.</>
+        : <>El corte incluye <strong>{hitos.length} fechas de fallo próximas</strong>. Activa Excel de Gantt para consultar tareas y responsables por expediente.</>}
+      </p>
+      <div className="ai-briefing-footer"><span><Database /> ComprasMX · corte {fuentes.corte}</span><button onClick={() => onDetail(alerta)}>Abrir expediente <ChevronRight /></button></div>
     </div>
-    <div className="insight-stack" aria-label="Hallazgos destacados">
-      <article className="insight-card critical"><span className="insight-icon"><ShieldAlert /></span><div><span>RIESGO INMEDIATO</span><strong>8 tareas sin iniciar</strong><p>Puerto Vallarta llega al fallo del 17 sep sin avance registrado. Confirmar estatus real y responsables hoy.</p></div></article>
-      <article className="insight-card"><span className="insight-icon"><Target /></span><div><span>CONCENTRACIÓN GEOGRÁFICA</span><strong>33 procesos en CDMX y Jalisco</strong><p>Ambas entidades representan 52% de los 64 procesos únicos del corte; conviene revisar dependencia de pipeline.</p></div></article>
-      <article className="insight-card"><span className="insight-icon"><Layers3 /></span><div><span>MEZCLA DEL PORTAFOLIO</span><strong>40 registros en construcción</strong><p>Es la etapa dominante: 49% de los 81 registros de listas de origen. Los conteos pueden traslaparse entre listas.</p></div></article>
-      {fuentesActivas.gantt && <article className="insight-card team"><span className="insight-icon"><Users /></span><div><span>CAPACIDAD DEL EQUIPO</span><strong>44 tareas con avance menor a 45%</strong><p>Alicia, Jemo y Javier/Brenda concentran esa carga. Validar bloqueos antes de reasignar trabajo.</p></div></article>}
+    <div className="insight-stack" aria-label="Datos clave del corte">
+      <h4 className="insight-stack-heading">Datos para revisar</h4>
+      <div className="insight-ledger">
+        {fuentesActivas.gantt
+          ? <article className="insight-record critical"><span>Avance</span><div><strong>8 tareas sin iniciar</strong><p>Puerto Vallarta · fallo 17 sep · confirma responsables.</p></div></article>
+          : <article className="insight-record"><span>Próximo fallo</span><div><strong>{primerFallo} · {expedienteProximo?.dependencia ?? 'Sin dependencia'}</strong><p>Revisa los requisitos de entrega del expediente.</p></div></article>}
+        <article className="insight-record"><span>Concentración</span><div><strong>33 procesos · CDMX y Jalisco</strong><p>52% de los 64 procesos únicos del corte.</p></div></article>
+        <article className="insight-record"><span>Etapa principal</span><div><strong>40 registros · Construcción</strong><p>49% de los registros de origen; algunos pueden aparecer en más de una lista.</p></div></article>
+        {fuentesActivas.gantt && <article className="insight-record"><span>Carga por revisar</span><div><strong>44 tareas con avance menor a 45%</strong><p>Alicia, Jemo y Javier/Brenda concentran esa carga.</p></div></article>}
+      </div>
     </div>
-    <p className="ai-disclaimer"><Bot /> Interpretación preliminar sobre datos disponibles; validar decisiones y fechas con los responsables.</p>
+    <p className="ai-disclaimer"><Info /> Lectura editorial precargada para esta demostración. Confirma las fechas y el avance con la fuente.</p>
   </section>;
 }
 
@@ -486,17 +515,18 @@ function CapacidadVsDemanda({ onDetail }: { onDetail: (item: Licitacion) => void
         </div>
         <div className="capacidad-propuesta">
           <div className="capacidad-propuesta-copy">
-            <p className="section-kicker">RECOMENDACIÓN</p>
+            <p className="section-kicker">PROPUESTA DE REASIGNACIÓN</p>
             <strong className="capacidad-propuesta-title">Reasignar una tarea económica de {sobrecargada.nombre} a {destino.nombre}</strong>
             <p>Mover <strong>&quot;{tareaAMover.nombre}&quot;</strong> del expediente <strong>{tramoIIICapacidad.numero}</strong>, con fallo el {tramoIIICapacidad.fallo}. {destino.nombre} registra {luisAbiertas82km.length ? km82Capacidad.tareas!.find((t) => t.nombre === luisAbiertas82km[0].nombre)?.avance : 0}% de avance en su única tarea abierta.</p>
           </div>
           <div className="capacidad-propuesta-action">
             {estado === 'pendiente' && <div className="capacidad-actions">
-              <Button className="capacidad-approve" onClick={() => setEstado('aprobado')}><ThumbsUp /> Aprobar</Button>
-              <Button variant="outline" onClick={() => setEstado('rechazado')}><ThumbsDown /> Rechazar</Button>
+              <p className="decision-demo-note"><Info /> Simulación local: no modifica el Excel de Gantt.</p>
+              <Button className="capacidad-approve" onClick={() => setEstado('aprobado')}><ThumbsUp /> Simular aprobación</Button>
+              <Button variant="outline" onClick={() => setEstado('rechazado')}><ThumbsDown /> Simular rechazo</Button>
             </div>}
-            {estado === 'aprobado' && <div className="capacidad-decision approved"><CheckCircle2 /><div><strong>Aprobado por Alberto García</strong><span>{fecha} · reasignación registrada, evidencia y expedientes trazables arriba</span></div></div>}
-            {estado === 'rechazado' && <div className="capacidad-decision rejected"><X /><div><strong>Rechazado por Alberto García</strong><span>{fecha} · sin cambios en la asignación, queda registrado el motivo si se agrega</span></div></div>}
+            {estado === 'aprobado' && <div className="capacidad-decision approved"><CheckCircle2 /><div><strong>Simulación de aprobación</strong><span>{fecha} · decisión temporal de esta sesión; la asignación de origen no cambió.</span></div></div>}
+            {estado === 'rechazado' && <div className="capacidad-decision rejected"><X /><div><strong>Simulación de rechazo</strong><span>{fecha} · decisión temporal de esta sesión; no se guardó un motivo ni se cambió el origen.</span></div></div>}
           </div>
         </div>
       </CardContent>
@@ -517,22 +547,22 @@ function LicitacionesView(props: { query:string; setQuery:(v:string)=>void; stat
   const hasFilters = props.query.length > 0 || props.stateFilter !== 'Todos' || props.entityFilter !== 'Todas';
   const clearFilters = () => { props.setQuery(''); props.setStateFilter('Todos'); props.setEntityFilter('Todas'); };
   return <section className="list-view">
-    <div className="directory-heading"><div><p className="section-kicker">CONTROL DE LICITACIONES</p><h2>Directorio de procesos</h2><p>Encuentra un expediente y revisa su situación operativa en un solo lugar.</p></div><div className="directory-stats" aria-label="Resumen del directorio"><div><span>Procesos del corte</span><strong>{fuentes.totalProcesosUnicos}</strong></div><div><span>En ejecución</span><strong>{activeProcesses}</strong></div><div className="risk"><span>Fallos con fecha</span><strong>{datedDecisions}</strong></div></div></div>
+    <div className="directory-heading"><div><p className="section-kicker">CONTROL DE LICITACIONES</p><h2>Directorio de procesos</h2><p>Encuentra un expediente y revisa su situación operativa en un solo lugar.</p></div><section className="directory-stats" aria-label="Resumen del directorio"><div><span>Procesos del corte</span><strong>{fuentes.totalProcesosUnicos}</strong></div><div><span>En ejecución</span><strong>{activeProcesses}</strong></div><div className="risk"><span>Fallos con fecha</span><strong>{datedDecisions}</strong></div></section></div>
     <div className="directory-toolbar">
       <div className="search-field"><Search /><Input aria-label="Buscar licitaciones" value={props.query} onChange={(event) => props.setQuery(event.target.value)} placeholder="Buscar por proceso, dependencia o entidad…" />{props.query && <button className="clear-search" aria-label="Borrar búsqueda" onClick={() => props.setQuery('')}><X /></button>}</div>
-      <div className="filter-group" aria-label="Filtros del directorio"><span className="filter-label"><Filter />Filtrar</span><div className="select-field"><Select value={props.stateFilter} onValueChange={(value) => props.setStateFilter(value as 'Todos'|Estado)}><SelectTrigger aria-label="Filtrar por estado"><SelectValue /></SelectTrigger><SelectContent>{['Todos','Detectada','Filtrada','En trabajo','Construcción','Fallo'].map((option) => <SelectItem value={option} key={option}>{option}</SelectItem>)}</SelectContent></Select></div>
-      <Select value={props.entityFilter} onValueChange={(value) => props.setEntityFilter(value as string)}><SelectTrigger className="entity-select" aria-label="Filtrar por entidad"><SelectValue /></SelectTrigger><SelectContent>{entities.map((entity) => <SelectItem value={entity} key={entity}>{entity}</SelectItem>)}</SelectContent></Select>{hasFilters && <button className="clear-filters" onClick={clearFilters}>Limpiar filtros</button>}</div>
+      <section className="filter-group" aria-label="Filtros del directorio"><span className="filter-label"><Filter />Filtrar</span><div className="select-field"><Select value={props.stateFilter} onValueChange={(value) => props.setStateFilter(value as 'Todos'|Estado)}><SelectTrigger aria-label="Filtrar por estado"><SelectValue /></SelectTrigger><SelectContent>{['Todos','Detectada','Filtrada','En trabajo','Construcción','Fallo'].map((option) => <SelectItem value={option} key={option}>{option}</SelectItem>)}</SelectContent></Select></div>
+      <Select value={props.entityFilter} onValueChange={(value) => props.setEntityFilter(value as string)}><SelectTrigger className="entity-select" aria-label="Filtrar por entidad"><SelectValue /></SelectTrigger><SelectContent>{entities.map((entity) => <SelectItem value={entity} key={entity}>{entity}</SelectItem>)}</SelectContent></Select>{hasFilters && <button className="clear-filters" onClick={clearFilters}>Limpiar filtros</button>}</section>
     </div>
     <div className="table-card">
-      <div className="table-summary"><div><strong>{props.filtered.length}</strong><span>procesos encontrados</span></div><small>Selecciona una fila para abrir el expediente completo</small></div>
-      <div className="table-scroll"><table><thead><tr><th>Proceso</th><th>Dependencia / entidad</th><th>Estado</th><th>Próximo hito</th><th aria-label="Acciones" /></tr></thead><tbody>{visible.map((item) => {
+      <div className="table-summary"><div aria-live="polite" aria-atomic="true"><strong>{props.filtered.length}</strong><span>procesos encontrados</span></div><small>Abre un expediente desde su nombre o el botón de la última columna</small></div>
+      <div className="table-scroll"><table><thead><tr><th scope="col">Proceso</th><th scope="col">Dependencia / entidad</th><th scope="col">Estado</th><th scope="col">Próximo hito</th><th scope="col" aria-label="Acciones" /></tr></thead><tbody>{visible.map((item) => {
         const fechaFallo = fallosFechadosPorId.get(item.id);
-        return <tr className={fechaFallo ? 'dated-fall-row' : undefined} key={item.id} tabIndex={0} onClick={() => props.onDetail(item)} onKeyDown={(event) => { if (event.key === 'Enter') props.onDetail(item); }}>
-          <td><strong>{item.nombre}</strong><span>{item.numero}</span></td>
+        return <tr className={fechaFallo ? 'dated-fall-row' : undefined} key={item.id}>
+          <td><button className="process-open" aria-label={`Abrir ${item.nombre}, expediente ${item.numero}`} onClick={() => props.onDetail(item)}><strong>{item.nombre}</strong><span>{item.numero}</span></button></td>
           <td><strong>{item.dependencia}</strong><span><MapPin />{item.entidad}</span></td>
           <td><StateBadge state={item.estado} /></td>
           <td><strong>{item.estado === 'Fallo' ? item.fallo : item.apertura}</strong><span>{item.estado === 'Fallo' ? 'Fallo' : 'Presentación'}</span>{fechaFallo && <span className="table-fall-reference"><AlertTriangle aria-hidden="true" />{item.estado === 'Fallo' ? 'Fecha de fallo registrada' : `Fallo · ${fechaFallo}`}</span>}</td>
-          <td><button aria-label={`Ver ${item.numero}`}><ChevronRight /></button></td>
+          <td><button aria-label={`Abrir expediente ${item.numero}`} onClick={() => props.onDetail(item)}><ChevronRight /></button></td>
         </tr>;
       })}</tbody></table></div>
       {props.filtered.length === 0 && <div className="empty-state"><Search /><strong>Sin coincidencias</strong><span>Ajusta la búsqueda o los filtros.</span></div>}
@@ -583,16 +613,6 @@ function OfertasView() {
       </div>
     </div>
 
-    <section className="natural-reading commercial-reading" aria-labelledby="commercial-reading-title">
-      <span className="natural-reading-icon"><BrainCircuit aria-hidden="true" /></span>
-      <div className="natural-reading-copy">
-        <span className="natural-reading-kicker">LECTURA COMERCIAL</span>
-        <h3 id="commercial-reading-title">El riesgo de esta oportunidad está en el seguimiento, no en su valor.</h3>
-        <p><strong>Via Sentera representa $17.2 M</strong> y continúa en seguimiento, pero no tiene fecha límite, cierre ni próxima actividad registrados. Sin esas fechas no es posible medir su madurez ni anticipar cuándo debe intervenir el equipo comercial.</p>
-      </div>
-      <div className="natural-reading-action"><span>PRÓXIMA ACCIÓN</span><strong>Definir responsable y fecha del siguiente contacto con KIVA.</strong></div>
-    </section>
-
     <div className="offer-main-grid">
       <section className="offer-list-panel" aria-labelledby="offer-list-title">
         <div className="offer-panel-heading">
@@ -602,7 +622,7 @@ function OfertasView() {
 
         {ofertas.length > 0 ? <div className="offer-table-scroll">
           <table className="offer-table">
-            <thead><tr><th scope="col">Proyecto</th><th scope="col">Empresa y servicio</th><th scope="col">Estado</th><th scope="col">Monto</th></tr></thead>
+            <thead><tr><th scope="col">Proyecto</th><th scope="col">Empresa y servicio</th><th scope="col">Estado</th><th scope="col">Monto · moneda no indicada</th></tr></thead>
             <tbody>{ofertas.map((item) => <tr key={item.id}>
               <td data-label="Proyecto"><strong>{item.proyecto}</strong></td>
               <td data-label="Empresa y servicio"><strong>{item.empresa}</strong><span>{item.servicio}</span></td>
@@ -629,7 +649,7 @@ function OfertasView() {
             <strong>Sin registrar</strong>
           </li>)}
         </ul> : <p className="offer-followup-complete"><CheckCircle2 aria-hidden="true" />No hay fechas pendientes.</p>}
-        {fechasPendientes.length > 0 && <p className="offer-followup-note">Estas fechas no aparecen capturadas en el registro de origen.</p>}
+        {fechasPendientes.length > 0 && <p className="offer-followup-note">Estas fechas no aparecen en el registro de origen. La demostración es de consulta; actualízalas en la fuente comercial.</p>}
       </aside>
     </div>
   </section>;
@@ -653,12 +673,6 @@ function DetailView({ item, onBack }: { item:Licitacion; onBack:()=>void }) {
     { label:'Presentación', value:item.apertura },
     ...(item.fallo ? [{ label:'Fallo', value:item.fallo }] : []),
   ];
-  const pending = tareas.filter((task) => task.avance < 100).length;
-  const areaProgress = (['Económica', 'Precio', 'Técnica'] as const).map((area) => {
-    const areaTasks = tareas.filter((task) => task.area === area);
-    return { area, average: areaTasks.length ? Math.round(areaTasks.reduce((sum, task) => sum + task.avance, 0) / areaTasks.length) : 101 };
-  }).filter(({ average: areaAverage }) => areaAverage <= 100).sort((a, b) => a.average - b.average);
-  const weakestArea = areaProgress[0];
   return <section className="detail-view">
     <button className="back-button" onClick={onBack}><ChevronLeft /> Volver a licitaciones</button>
     <article className="detail-hero">
@@ -679,16 +693,6 @@ function DetailView({ item, onBack }: { item:Licitacion; onBack:()=>void }) {
         <span className="milestone-index">{index + 1}</span><div><span>{date.label}</span><strong>{date.value}</strong></div>
       </div>)}
     </div>
-
-    <section className="natural-reading detail-reading" aria-labelledby="detail-reading-title">
-      <span className="natural-reading-icon"><BrainCircuit aria-hidden="true" /></span>
-      <div className="natural-reading-copy">
-        <span className="natural-reading-kicker">LECTURA OPERATIVA</span>
-        <h3 id="detail-reading-title">{tareas.length ? (average < 35 ? 'El avance registrado requiere atención antes del siguiente hito.' : average < 75 ? 'El expediente avanza, pero todavía conserva trabajo relevante abierto.' : 'El expediente muestra un avance sólido; conviene proteger el cierre.') : 'Falta seguimiento operativo para evaluar el riesgo real del expediente.'}</h3>
-        <p>{tareas.length ? <>El expediente registra <strong>{average}% de avance</strong>, con {pending} de {tareas.length} tareas todavía abiertas.{weakestArea && <> El frente con menor avance es <strong>{weakestArea.area.toLowerCase()}</strong> ({weakestArea.average}%).</>} {item.fallo ? <>El fallo está previsto para el <strong>{item.fallo}</strong>.</> : 'No hay fecha de fallo registrada.'}</> : <>ComprasMX aporta las fechas del proceso, pero el corte no contiene tareas, responsables ni porcentajes de avance. <strong>No es posible concluir si el expediente está listo</strong> con la información actual.</>}</p>
-      </div>
-      <div className="natural-reading-action"><span>PRÓXIMA ACCIÓN</span><strong>{tareas.length ? (weakestArea ? `Validar pendientes del frente ${weakestArea.area.toLowerCase()} con su responsable.` : 'Confirmar que el cierre operativo esté documentado.') : 'Solicitar el plan de tareas y asignar responsables.'}</strong></div>
-    </section>
 
     <div className="detail-layout">
       <aside className="detail-side">
@@ -733,41 +737,50 @@ const questionMeta: Record<ChatKey, { label: string; hint: string }> = {
   cruce: { label: 'El equipo', hint: 'Personas que podrían necesitar apoyo' },
 };
 
-function matchChatQuestion(value: string): ChatKey {
+function matchChatQuestion(value: string): ChatKey | null {
   const normalized = value.toLocaleLowerCase('es-MX');
+  if (/urge|hoy|atenci[oó]n|vence|fallo|fecha|hito|decisi[oó]n/.test(normalized)) return 'vence';
   if (/oferta|monto|empresa|comercial|cliente|kiva/.test(normalized)) return 'oferta';
   if (/avance|tarea|entregable|tramo|proyecto|cómo vamos|como vamos/.test(normalized)) return 'avance';
   if (/responsable|asignad|carga|quien|quién|equipo|apoyo|bloqueo/.test(normalized)) return 'cruce';
-  return 'vence';
+  return null;
 }
 
 function IntelligencePanel({ open, onOpenChange, onDetail }: { open:boolean; onOpenChange:(v:boolean)=>void; onDetail:(v:Licitacion)=>void }) {
   const [messages, setMessages] = useState<Array<{ key: ChatKey; question: string }>>([]);
   const [draft, setDraft] = useState('');
+  const [unsupported, setUnsupported] = useState('');
   const chatEnd = useRef<HTMLDivElement>(null);
 
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [messages]);
 
   const ask = (key: ChatKey, question = chatAnswers[key].question) => {
     setMessages((current) => [...current, { key, question }]);
+    setUnsupported('');
     setDraft('');
   };
   const submit = (event: { preventDefault: () => void }) => {
     event.preventDefault();
     const question = draft.trim();
     if (!question) return;
-    ask(matchChatQuestion(question), question);
+    const key = matchChatQuestion(question);
+    if (!key) {
+      setUnsupported(question);
+      setDraft('');
+      return;
+    }
+    ask(key, question);
   };
 
   return <Sheet open={open} onOpenChange={onOpenChange}><SheetContent className="intelligence-sheet" side="right">
     <SheetHeader className="intelligence-head">
-      <div className="intelligence-title"><div><SheetTitle>Asistente operativo</SheetTitle><span className="assistant-status"><i /> Disponible</span></div><SheetDescription>Pregunta como lo harías con tu equipo</SheetDescription></div>
-      {messages.length > 0 && <button className="clear-chat" onClick={() => setMessages([])} aria-label="Iniciar nueva conversación"><RotateCcw /> Nueva</button>}
+      <div className="intelligence-title"><div><SheetTitle>Consultas del corte</SheetTitle><span className="assistant-status"><i /> Respuestas guiadas</span></div><SheetDescription>Consultas preparadas para esta demostración; no es IA generativa.</SheetDescription></div>
+      {(messages.length > 0 || unsupported) && <button className="clear-chat" onClick={() => { setMessages([]); setUnsupported(''); }} aria-label="Iniciar nueva conversación"><RotateCcw /> Reiniciar</button>}
     </SheetHeader>
     <div className="chat-body" aria-live="polite">
       <div className="chat-welcome">
-        <span className="bot-avatar"><Bot /></span>
-        <div className="assistant-bubble"><p>Hola, Alberto. ¿Qué quieres saber del negocio?</p><span>Pregúntame con tus propias palabras. Puedo decirte qué urge, cómo van los proyectos, en qué trabaja el equipo o qué pasa con un cliente.</span></div>
+        <span className="bot-avatar"><Database /></span>
+        <div className="assistant-bubble"><p>¿Qué quieres consultar?</p><span>Elige una de las cuatro preguntas sugeridas o escribe palabras clave sobre fechas, avance, equipo u ofertas. Las respuestas usan datos precargados.</span></div>
       </div>
 
       {messages.length === 0 && <section className="suggested-questions" aria-label="Preguntas sugeridas">
@@ -775,19 +788,20 @@ function IntelligencePanel({ open, onOpenChange, onDetail }: { open:boolean; onO
         <div className="question-chips">{(Object.keys(chatAnswers) as ChatKey[]).map((key) => <button key={key} onClick={() => ask(key)}><span>{questionMeta[key].label}</span><strong>{chatAnswers[key].question}</strong><small>{questionMeta[key].hint}</small><ArrowRight /></button>)}</div>
       </section>}
 
+      {unsupported && <div className="unsupported-reply" aria-live="polite"><strong>No encontré una consulta guiada para:</strong><span>“{unsupported}”</span><p>Prueba con una de las preguntas sugeridas o usa palabras como “fallo”, “avance”, “equipo” u “oferta”.</p></div>}
       {messages.map((message, index) => {
         const answer = chatAnswers[message.key];
         return <div className="conversation-turn" key={`${message.key}-${index}`}>
           <div className="user-message">{message.question}</div>
-          <div className="ai-message answer"><span className="bot-avatar"><Bot /></span><div className="assistant-response"><p>{answer.answer}</p>{answer.tender && <button className="result-card" onClick={() => { onDetail(answer.tender!); onOpenChange(false); }}><div><span>Expediente relacionado</span><strong>{answer.tender.nombre}</strong><small>{answer.tender.numero}</small></div><ChevronRight /></button>}<div className="response-source"><Database /><span>Fuente: {answer.source}</span></div></div></div>
+          <div className="ai-message answer"><span className="bot-avatar"><Database /></span><div className="assistant-response"><p>{answer.answer}</p>{answer.tender && <button className="result-card" onClick={() => { onDetail(answer.tender!); onOpenChange(false); }}><div><span>Expediente relacionado</span><strong>{answer.tender.nombre}</strong><small>{answer.tender.numero}</small></div><ChevronRight /></button>}<div className="response-source"><Database /><span>Fuente: {answer.source}</span></div></div></div>
         </div>;
       })}
       <div ref={chatEnd} />
     </div>
     <div className="chat-footer">
       {messages.length > 0 && <div className="quick-prompts">{(Object.keys(chatAnswers) as ChatKey[]).filter((key) => !messages.some((message) => message.key === key)).slice(0, 2).map((key) => <button key={key} onClick={() => ask(key)}>{questionMeta[key].label}</button>)}</div>}
-      <form className="chat-composer" onSubmit={submit}><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Ej. ¿Qué debería revisar hoy?" aria-label="Pregunta para el asistente" /><button type="submit" disabled={!draft.trim()} aria-label="Enviar pregunta"><Send /></button></form>
-      <div className="chat-context"><Database /><span>Respuestas basadas en el corte operativo</span><time>{fuentes.corte}</time></div>
+      <form className="chat-composer" onSubmit={submit}><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Ej. fallos próximos, oferta, avance…" aria-label="Buscar en las consultas guiadas" /><button type="submit" disabled={!draft.trim()} aria-label="Buscar consulta"><Search /></button></form>
+      <div className="chat-context"><Database /><span>Contenido precargado · corte {fuentes.corte}</span></div>
     </div>
   </SheetContent></Sheet>;
 }

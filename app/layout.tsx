@@ -1,15 +1,16 @@
 import type { Metadata } from 'next';
 import { Roboto, Roboto_Mono } from 'next/font/google';
 import './globals.css';
+import './operational-design.css';
 
-const geistSans = Roboto({
-  variable: '--font-geist-sans',
+const robotoSans = Roboto({
+  variable: '--font-roboto-sans',
   subsets: ['latin'],
   weight: ['400', '500', '700'],
 });
 
-const geistMono = Roboto_Mono({
-  variable: '--font-geist-mono',
+const robotoMono = Roboto_Mono({
+  variable: '--font-roboto-mono',
   subsets: ['latin'],
   weight: ['400', '500', '700'],
 });
@@ -30,7 +31,7 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${robotoSans.variable} ${robotoMono.variable} antialiased`}
       >
         {children}
       </body>
