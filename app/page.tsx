@@ -21,7 +21,7 @@ import {
 } from '@/lib/mock-data';
 
 type View = 'panorama' | 'licitaciones' | 'ofertas' | 'detalle';
-type ChatKey = 'vence' | 'avance' | 'oferta' | 'cruce';
+type ChatKey = 'vence' | 'avance' | 'oferta' | 'cruce' | 'sinArrancar' | 'ofertaVsLicitacion' | 'pipeline' | 'moneda';
 type ModelContext = { registerTool: (tool: Record<string, unknown>, options?: { signal?: AbortSignal }) => void | Promise<void> };
 
 // --- Pieza 5: barra de módulos de empresa. Licitaciones es UN módulo conectado; RH/Finanzas/Obra
@@ -71,6 +71,11 @@ const tramoIITareaTop = [...tramoII.tareas!].sort((a, b) => b.avance - a.avance)
 const tramoIIPendientes = tramoII.tareas!.filter((t) => t.avance === 0).length;
 const tramoIIResponsables = Array.from(new Set(tramoII.tareas!.map((t) => t.responsable))).join(', ');
 
+// Expedientes con Gantt activo pero sin ninguna tarea iniciada todavía (0% en todas).
+const expedientesConTareasArr = licitaciones.filter((item) => item.tareas?.length);
+const expedientesSinArrancar = expedientesConTareasArr.filter((item) => item.tareas!.every((t) => t.avance === 0));
+const expedienteSinArrancarDestacado = expedientesSinArrancar[0];
+
 const chatAnswers: Record<ChatKey, { question: string; answer: string; source: string; tender?: Licitacion }> = {
   vence: {
     question: '¿Qué necesita mi atención hoy?',
@@ -94,6 +99,29 @@ const chatAnswers: Record<ChatKey, { question: string; answer: string; source: s
     answer: `El proyecto de ${lagosDeMoreno.dependencia} tiene una decisión próxima, el ${lagosDeMoreno.fallo}. ${lagosDeMoreno.tareas!.find((t) => t.area === 'Económica')?.responsable} lleva la parte económica, ${lagosDeMoreno.tareas!.find((t) => t.area === 'Técnica')?.responsable} la técnica y ${lagosDeMoreno.tareas!.find((t) => t.area === 'Precio')?.responsable} la revisión de precios. Conviene confirmar con ellos si tienen algún bloqueo.`,
     source: 'ComprasMX + Excel de Gantt',
     tender: lagosDeMoreno,
+  },
+  sinArrancar: {
+    question: '¿Qué expedientes tienen su Gantt sin arrancar?',
+    answer: expedientesSinArrancar.length
+      ? `Hay ${expedientesSinArrancar.length} expediente${expedientesSinArrancar.length === 1 ? '' : 's'} con 0% de avance en todas sus tareas: ${expedientesSinArrancar.map((item) => `${item.dependencia} (${item.numero})`).join('; ')}. ${expedienteSinArrancarDestacado ? `El de ${expedienteSinArrancarDestacado.dependencia} es el más urgente si su fallo ya está próximo.` : ''}`
+      : 'Ahora mismo no hay ningún expediente con todas sus tareas en 0%; todos los que tienen Gantt activo ya registran algo de avance.',
+    source: 'Excel de Gantt · Seguimiento de tareas',
+    tender: expedienteSinArrancarDestacado,
+  },
+  ofertaVsLicitacion: {
+    question: '¿Cuál es la diferencia entre mis licitaciones y mis ofertas?',
+    answer: `Licitaciones = procesos públicos en los que GAIP concursa (${fuentes.totalProcesosUnicos} procesos únicos en el pipeline actual: detectadas, filtradas, en trabajo, en construcción o con fallo). Ofertas = propuestas comerciales que GAIP genera directamente hacia un cliente (por ahora ${ofertas.length}: ${oferta.proyecto} con ${oferta.empresa}). Viven separadas en el sistema — nunca se mezclan en la misma lista ni en los mismos filtros.`,
+    source: 'ComprasMX + Excel de Ofertas',
+  },
+  pipeline: {
+    question: 'Dame un resumen general del pipeline',
+    answer: `Ahora mismo GAIP tiene ${fuentes.totalRegistrosRecibidos} registros en el pipeline (sin contar las ${fuentes.totalInvitacionesSinProcesar} invitaciones aún sin procesar): ${stages.map((s) => `${s.value} en ${s.label.toLowerCase()}`).join(', ')}. Además, respaldando todo esto, hay un histórico de ${historicoResumen.totalExpedientes.toLocaleString('es-MX')} expedientes ya analizados por el sistema en los últimos ${historicoResumen.totalSnapshots} cortes.`,
+    source: 'ComprasMX · Corte ' + fuentes.corte,
+  },
+  moneda: {
+    question: '¿En qué moneda está la oferta de KIVA?',
+    answer: `La fuente no especifica la moneda del monto de ${oferta.proyecto} (${oferta.monto}) — el Excel de Ofertas trae la cifra sin esa columna. No lo inventamos: conviene confirmarlo directamente en la fuente comercial antes de reportarlo.`,
+    source: 'Excel de Ofertas · Registro comercial',
   },
 };
 
@@ -315,6 +343,7 @@ function GraySourceDialog({ label, hoy, con, onClose }: { label: string; hoy: st
 function Dashboard({ onAll, onHitos, onDetail }: { onAll: () => void; onHitos: () => void; onDetail: (item: Licitacion) => void }) {
   const expedientesConTareas = licitaciones.filter((item) => item.tareas?.length).length;
   const metrics = [
+    { label:'Invitaciones sin procesar', value: fuentes.totalInvitacionesSinProcesar.toLocaleString('es-MX'), detail:'Esperando filtro de GAIP, aún no entran al pipeline', icon:FileStack },
     { label:'Expedientes históricos', value: historicoResumen.totalExpedientes.toLocaleString('es-MX'), detail:`${historicoResumen.totalSnapshots} cortes consolidados`, icon:Database },
     { label:'Expedientes con tareas', value:String(expedientesConTareas), detail:'Con avances registrados en la fuente', icon:Gauge },
     { label:'Oferta en seguimiento', value: oferta.monto, detail:`${oferta.empresa} · ${oferta.proyecto}`, icon:TrendingUp },
@@ -754,10 +783,18 @@ const questionMeta: Record<ChatKey, { label: string; hint: string }> = {
   avance: { label: 'Cómo vamos', hint: 'Una lectura rápida del proyecto' },
   oferta: { label: 'Con un cliente', hint: 'Qué estamos haciendo y por cuánto' },
   cruce: { label: 'El equipo', hint: 'Personas que podrían necesitar apoyo' },
+  sinArrancar: { label: 'Sin arrancar', hint: 'Gantt con 0% de avance' },
+  ofertaVsLicitacion: { label: 'Licitación vs. Oferta', hint: 'En qué se diferencian' },
+  pipeline: { label: 'Resumen del pipeline', hint: 'Todo el corte de un vistazo' },
+  moneda: { label: 'Un dato que falta', hint: 'Cuando la fuente no lo trae' },
 };
 
 function matchChatQuestion(value: string): ChatKey | null {
   const normalized = value.toLocaleLowerCase('es-MX');
+  if (/moneda|divisa/.test(normalized)) return 'moneda';
+  if (/diferencia|vs\.?|versus|distinci[oó]n/.test(normalized)) return 'ofertaVsLicitacion';
+  if (/resumen|pipeline|panorama general/.test(normalized)) return 'pipeline';
+  if (/sin arrancar|sin iniciar|0%|sin avance/.test(normalized)) return 'sinArrancar';
   if (/urge|hoy|atenci[oó]n|vence|fallo|fecha|hito|decisi[oó]n/.test(normalized)) return 'vence';
   if (/oferta|monto|empresa|comercial|cliente|kiva/.test(normalized)) return 'oferta';
   if (/avance|tarea|entregable|tramo|proyecto|cómo vamos|como vamos/.test(normalized)) return 'avance';
