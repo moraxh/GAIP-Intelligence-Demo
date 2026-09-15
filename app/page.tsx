@@ -5,8 +5,8 @@ import Image from 'next/image';
 import {
   AlertTriangle, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronLeft,
   ChevronRight, Database, FileStack, Filter, Gauge, Lock,
-  MapPin, NotebookPen, Search, TrendingUp, Users, X, ArrowRight, ThumbsDown, ThumbsUp,
-  Building2, Wallet, HardHat, UserRound, MessageCircle, RotateCcw, Info,
+  MapPin, Search, TrendingUp, Users, X, ArrowRight,
+  Building2, Wallet, HardHat, UserRound, MessageCircle, RotateCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,10 +14,10 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
-  carga, fuentes, hitos, historicoResumen, licitaciones, notas, oferta, ofertas,
-  porEntidad, stages, type Estado, type Licitacion,
+  carga, fuentes, hitos, historicoResumen, licitaciones, oferta, ofertas,
+  porEntidad, stages, type Estado, type Licitacion, type Tarea,
 } from '@/lib/mock-data';
 
 type View = 'panorama' | 'licitaciones' | 'ofertas' | 'detalle';
@@ -99,7 +99,7 @@ const chatAnswers: Record<ChatKey, { question: string; answer: string; source: s
 
 // --- Pieza 3: Capacidad vs. Demanda — el cruce Gantt x fechas de fallo que ComprasMX no puede hacer. ---
 // Caso real: ALICIA tiene tareas abiertas en dos expedientes con fallo próximo (Tramo II 08-oct, Tramo III 30-sep);
-// LUIS tiene una sola tarea abierta, en un expediente sin fecha de fallo registrada todavía y más avanzada (82km, 60%).
+// LUIS tiene tres tareas abiertas, en un expediente sin fecha de fallo registrada todavía (82km).
 const tramoIICapacidad = licitacionPorId('E-2026-00080053');
 const tramoIIICapacidad = licitacionPorId('XLS-LO09JZO009JZO001N342026');
 const km82Capacidad = licitacionPorId('E-2026-00084041');
@@ -107,6 +107,9 @@ const km82Capacidad = licitacionPorId('E-2026-00084041');
 const aliciaAbiertasTramoII = tramoIICapacidad.tareas!.filter((t) => t.responsable === 'ALICIA' && t.avance < 100);
 const aliciaAbiertasTramoIII = tramoIIICapacidad.tareas!.filter((t) => t.responsable === 'ALICIA' && t.avance < 100);
 const luisAbiertas82km = km82Capacidad.tareas!.filter((t) => t.responsable === 'LUIS' && t.avance < 100);
+const luisAbiertas82kmAvance = luisAbiertas82km.length
+  ? Math.round(luisAbiertas82km.reduce((sum, t) => sum + t.avance, 0) / luisAbiertas82km.length)
+  : 0;
 const aliciaCarga = carga.find((c) => c.nombre === 'Alicia')!;
 const luisCarga = carga.find((c) => c.nombre === 'Luis')!;
 
@@ -132,18 +135,21 @@ export default function Home() {
   const [entityFilter, setEntityFilter] = useState('Todas');
   const [tenderPage, setTenderPage] = useState(0);
   const [chatOpen, setChatOpen] = useState(false);
+  const [onlyHitos, setOnlyHitos] = useState(false);
 
   const [moduloAbierto, setModuloAbierto] = useState<string | null>(null);
 
   const openDetail = (item: Licitacion) => { setSelected(item); setView('detalle'); };
-  const navigate = (next: View) => { setView(next); if (next !== 'detalle') setSelected(null); };
+  const navigate = (next: View) => { setView(next); if (next !== 'detalle') setSelected(null); if (next !== 'licitaciones') setOnlyHitos(false); };
+  const openHitos = () => { setOnlyHitos(true); setQuery(''); setStateFilter('Todos'); setEntityFilter('Todas'); setTenderPage(0); setView('licitaciones'); };
   const moduloActivo: ModuloKey = 'licitaciones';
   const modulosGris = modulosNoConectados.find((m) => m.key === moduloAbierto);
+  const hitosIds = useMemo(() => new Set(hitos.map((h) => h.id)), []);
 
   const filtered = useMemo(() => licitaciones.filter((item) => {
     const text = `${item.numero} ${item.nombre} ${item.dependencia} ${item.entidad}`.toLowerCase();
-    return text.includes(query.toLowerCase()) && (stateFilter === 'Todos' || item.estado === stateFilter) && (entityFilter === 'Todas' || item.entidad === entityFilter);
-  }), [query, stateFilter, entityFilter]);
+    return text.includes(query.toLowerCase()) && (stateFilter === 'Todos' || item.estado === stateFilter) && (entityFilter === 'Todas' || item.entidad === entityFilter) && (!onlyHitos || hitosIds.has(item.id));
+  }), [query, stateFilter, entityFilter, onlyHitos, hitosIds]);
 
   useEffect(() => {
     const context = (document as Document & { modelContext?: ModelContext }).modelContext;
@@ -239,7 +245,7 @@ export default function Home() {
         </header>
 
         <div className="content">
-          {view === 'panorama' && <Dashboard onAll={() => navigate('licitaciones')} onDetail={openDetail} />}
+          {view === 'panorama' && <Dashboard onAll={() => navigate('licitaciones')} onHitos={openHitos} onDetail={openDetail} />}
           {view === 'licitaciones' && <LicitacionesView
                 query={query}
                 setQuery={(value) => { setQuery(value); setTenderPage(0); }}
@@ -251,6 +257,8 @@ export default function Home() {
                 setPage={setTenderPage}
                 filtered={filtered}
                 onDetail={openDetail}
+                onlyHitos={onlyHitos}
+                clearOnlyHitos={() => { setOnlyHitos(false); setTenderPage(0); }}
               />}
           {view === 'ofertas' && <OfertasView />}
           {view === 'detalle' && selected && <DetailView item={selected} onBack={() => navigate('licitaciones')} />}
@@ -293,11 +301,10 @@ function ModuleBar({ activo, onLicitaciones, onGris }: { activo: ModuloKey; onLi
 // y la barra de módulos de empresa (Pieza 5). Misma regla: nunca una cifra simulada.
 function GraySourceDialog({ label, hoy, con, onClose }: { label: string; hoy: string; con: string; onClose: () => void }) {
   return <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-    <DialogContent className="gray-source-panel" showCloseButton={false}>
+    <DialogContent className="gray-source-panel">
       <DialogHeader className="gray-source-panel-head">
         <Lock aria-hidden="true" />
         <DialogTitle>{label}: no conectado</DialogTitle>
-        <DialogClose className="gray-source-close" aria-label="Cerrar"><X /><span className="sr-only">Cerrar</span></DialogClose>
       </DialogHeader>
       <p className="gray-source-today">{hoy}</p>
       <DialogDescription className="gray-source-would">{con}</DialogDescription>
@@ -305,16 +312,13 @@ function GraySourceDialog({ label, hoy, con, onClose }: { label: string; hoy: st
   </Dialog>;
 }
 
-function Dashboard({ onAll, onDetail }: { onAll: () => void; onDetail: (item: Licitacion) => void }) {
+function Dashboard({ onAll, onHitos, onDetail }: { onAll: () => void; onHitos: () => void; onDetail: (item: Licitacion) => void }) {
   const expedientesConTareas = licitaciones.filter((item) => item.tareas?.length).length;
   const metrics = [
-    { label:'Registros duplicados', value: String(fuentes.totalDuplicados), detail:'Diferencia entre registros recibidos y procesos únicos', icon:FileStack },
     { label:'Expedientes históricos', value: historicoResumen.totalExpedientes.toLocaleString('es-MX'), detail:`${historicoResumen.totalSnapshots} cortes consolidados`, icon:Database },
     { label:'Expedientes con tareas', value:String(expedientesConTareas), detail:'Con avances registrados en la fuente', icon:Gauge },
     { label:'Oferta en seguimiento', value: oferta.monto, detail:`${oferta.empresa} · ${oferta.proyecto}`, icon:TrendingUp },
   ];
-  const hitoDestacado = hitos[0] ? licitacionPorId(hitos[0].id) : undefined;
-  const notasSinExpediente = notas.filter((nota) => !nota.ligadaA).length;
   return <div className="executive-dashboard">
     <div className="page-heading"><div><h2>Resumen ejecutivo</h2><p>Corte operativo al {fuentes.corte}.</p></div><Button variant="outline" onClick={onAll}>Abrir directorio <ChevronRight /></Button></div>
 
@@ -323,7 +327,7 @@ function Dashboard({ onAll, onDetail }: { onAll: () => void; onDetail: (item: Li
       <div className="story-step"><div><span>Registros recibidos</span><strong>{fuentes.totalRegistrosRecibidos}</strong><small>en el corte actual</small></div></div>
       <div className="story-step"><div><span>Duplicados detectados</span><strong>{fuentes.totalDuplicados}</strong><small>conciliados automáticamente</small></div></div>
       <div className="story-step featured"><div><span>Cobertura</span><strong>{Math.round((fuentes.totalProcesosUnicos / fuentes.totalRegistrosRecibidos) * 100)}%</strong><small>de registros únicos</small></div></div>
-      {hitoDestacado && <button onClick={() => onDetail(hitoDestacado)}><span className="story-alert-icon"><AlertTriangle /></span><div><small>REQUIERE ATENCIÓN</small><strong>{hitos.length} hitos próximos</strong><span>Revisar prioridades del corte</span></div><ChevronRight /></button>}
+      {hitos.length > 0 && <button onClick={onHitos}><span className="story-alert-icon"><AlertTriangle /></span><div><small>REQUIERE ATENCIÓN</small><strong>{hitos.length} hitos próximos</strong><span>Ver los {hitos.length} expedientes con fallo próximo</span></div><ChevronRight /></button>}
     </section>
 
     <section className="metric-grid">
@@ -339,26 +343,12 @@ function Dashboard({ onAll, onDetail }: { onAll: () => void; onDetail: (item: Li
         <HistoricoAnalisis />
       </div>
       <div className="dashboard-card-column">
-        <Card className="executive-card milestones-card"><CardHeader><div><CardTitle>Próximos fallos</CardTitle><p>Fechas reportadas al corte {fuentes.corte}</p></div><CalendarDays /></CardHeader><CardContent><div className="deadline-list">{hitos.map((hito) => { const item = licitacionPorId(hito.id); const [dia, mes] = hito.fecha.split(' '); return <button className="deadline" key={item.id} onClick={() => onDetail(item)}><div className="date risk"><strong>{dia}</strong><span>{mes.toUpperCase()}</span></div><div><strong>{item.dependencia}</strong><span>{item.nombre}</span></div><ChevronRight /></button>; })}</div></CardContent></Card>
+        <Card className="executive-card milestones-card"><CardHeader><div><CardTitle>Próximos fallos</CardTitle><p>Fecha en que la dependencia resuelve el ganador · corte {fuentes.corte}</p></div><CalendarDays /></CardHeader><CardContent><div className="deadline-list">{hitos.map((hito) => { const item = licitacionPorId(hito.id); const [dia, mes] = hito.fecha.split(' '); return <button className="deadline" key={item.id} onClick={() => onDetail(item)}><div className="date risk"><strong>{dia}</strong><span>{mes.toUpperCase()}</span></div><div><strong>{item.dependencia}</strong><span>{item.nombre}</span></div><ChevronRight /></button>; })}</div></CardContent></Card>
         <Card className="executive-card workload-card"><CardHeader><div><CardTitle>Avance por responsable</CardTitle><p>Promedio de tareas asignadas · fuente: Excel de Gantt</p></div><Users /></CardHeader><CardContent><div className="workload-list">{carga.map((person) => <div className="workload" key={person.nombre}><div><strong>{person.nombre}</strong><span>{person.asignaciones} tareas</span></div><b>{person.avance}%</b><Progress value={person.avance} /></div>)}</div></CardContent></Card>
       </div>
     </section>
 
     <CapacidadVsDemanda onDetail={onDetail} />
-
-    {notas.length > 0 && <section className="notes-section" aria-label="Notas capturadas">
-      <details className="notes-disclosure">
-        <summary>
-          <span className="notes-disclosure-icon"><NotebookPen /></span>
-          <span className="notes-disclosure-copy"><strong>Notas capturadas</strong><small>{notasSinExpediente} de {notas.length} sin expediente asociado</small></span>
-          <span className="notes-disclosure-action">Ver registros <ChevronRight /></span>
-        </summary>
-        <div className="notes-disclosure-body">
-          <p className="section-kicker">RESPONSABLE · TEXTO DE LA FUENTE</p>
-          <div className="notes-list">{notas.map((nota) => { const ligada = nota.ligadaA ? licitacionPorId(nota.ligadaA) : undefined; return <div className="note-row" key={nota.id}><div className="note-owner">{nota.responsable}</div><div className="note-body"><span>{nota.texto}</span>{ligada && <button className="note-link" onClick={() => onDetail(ligada)}>{ligada.dependencia} · {ligada.numero}</button>}</div></div>; })}</div>
-        </div>
-      </details>
-    </section>}
   </div>;
 }
 
@@ -387,26 +377,28 @@ function AiExecutiveInsights({ onDetail }: { onDetail: (item: Licitacion) => voi
   </section>;
 }
 
-// --- Pieza 6: histórico como análisis, no como listado. Datos reales de historicoResumen + stages. ---
+// --- Pieza 6: embudo del corte actual (recibidos → únicos → en trabajo). El histórico de 60 cortes
+// se muestra aparte, solo como referencia de escala: no es la misma unidad de medida que el corte de hoy,
+// así que nunca se dividen entre sí (eso daba un falso "0.28% de conversión").
 function HistoricoAnalisis() {
-  const filtradas = stages.find((s) => s.label === 'Filtrada')?.value ?? 0;
   const enTrabajo = stages.find((s) => s.label === 'En trabajo')?.value ?? 0;
-  const embudoPct = ((enTrabajo / historicoResumen.totalExpedientes) * 100).toFixed(2);
-  return <section className="historico-analisis" aria-label="Análisis histórico">
+  const conversionPct = ((enTrabajo / fuentes.totalProcesosUnicos) * 100).toFixed(1);
+  return <section className="historico-analisis" aria-label="Análisis del corte">
     <Card className="executive-card">
-      <CardHeader><div><CardTitle>Embudo acumulado</CardTitle><p>Conversión del universo detectado a trabajo activo</p></div><span className="history-source"><Database />{historicoResumen.totalSnapshots} cortes</span></CardHeader>
+      <CardHeader><div><CardTitle>Embudo del corte</CardTitle><p>De registro recibido a trabajo activo, en el corte de hoy</p></div><span className="history-source"><Database />{fuentes.corte}</span></CardHeader>
       <CardContent>
         <div className="history-layout">
-          <div className="history-result"><span>CONVERSIÓN ACUMULADA</span><strong>{embudoPct}%</strong><small>del universo detectado está en trabajo activo</small></div>
+          <div className="history-result"><span>EN TRABAJO ACTIVO</span><strong>{conversionPct}%</strong><small>de los procesos únicos del corte</small></div>
           <div className="funnel-row">
-            <div className="funnel-step"><strong>{historicoResumen.totalExpedientes.toLocaleString('es-MX')}</strong><span>expedientes detectados</span></div>
+            <div className="funnel-step"><strong>{fuentes.totalRegistrosRecibidos}</strong><span>registros recibidos</span></div>
             <ChevronRight className="funnel-sep" />
-            <div className="funnel-step"><strong>{filtradas}</strong><span>filtrados por GAIP</span></div>
+            <div className="funnel-step"><strong>{fuentes.totalProcesosUnicos}</strong><span>procesos únicos</span></div>
             <ChevronRight className="funnel-sep" />
             <div className="funnel-step featured"><strong>{enTrabajo}</strong><span>en trabajo activo</span></div>
           </div>
         </div>
-        <p className="portfolio-note-inline"><Database />{enTrabajo} en trabajo ÷ {historicoResumen.totalExpedientes.toLocaleString('es-MX')} detectados · fuente: Histórico. Cálculo determinístico.</p>
+        <p className="portfolio-note-inline"><Database />{enTrabajo} en trabajo ÷ {fuentes.totalProcesosUnicos} procesos únicos · fuente: corte actual. Cálculo determinístico.</p>
+        <p className="portfolio-note-inline history-scale-note"><Database />Para referencia de escala: {historicoResumen.totalExpedientes.toLocaleString('es-MX')} expedientes acumulados en los últimos {historicoResumen.totalSnapshots} cortes.</p>
       </CardContent>
     </Card>
   </section>;
@@ -414,8 +406,6 @@ function HistoricoAnalisis() {
 
 // --- Pieza 3: Capacidad vs. Demanda con acción y aprobación. ---
 function CapacidadVsDemanda({ onDetail }: { onDetail: (item: Licitacion) => void }) {
-  const [estado, setEstado] = useState<'pendiente' | 'aprobado' | 'rechazado'>('pendiente');
-  const [fecha] = useState(() => new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' }));
   const { sobrecargada, destino, tareaAMover } = capacidadCaso;
   return <section className="capacidad-demanda" aria-label="Capacidad versus demanda">
     <Card className="executive-card capacidad-card">
@@ -425,7 +415,7 @@ function CapacidadVsDemanda({ onDetail }: { onDetail: (item: Licitacion) => void
           <div className="capacidad-persona overloaded">
             <span className="capacidad-persona-label">SOBRECARGADA</span>
             <strong>{sobrecargada.nombre}</strong>
-            <span className="capacidad-persona-stat">{sobrecargada.carga.avance}% avance promedio · {sobrecargada.carga.asignaciones} tareas asignadas</span>
+            <span className="capacidad-persona-stat">{sobrecargada.carga.asignaciones} tareas asignadas en total · {sobrecargada.expedientes.length} expedientes con fallo próximo</span>
             <div className="capacidad-expedientes">
               {sobrecargada.expedientes.map(({ item, tareas }) => <button className="capacidad-expediente" key={item.id} onClick={() => onDetail(item)}>
                 <span className="capacidad-expediente-dep">{item.dependencia}</span>
@@ -438,12 +428,12 @@ function CapacidadVsDemanda({ onDetail }: { onDetail: (item: Licitacion) => void
           <div className="capacidad-persona available">
             <span className="capacidad-persona-label">CON CAPACIDAD</span>
             <strong>{destino.nombre}</strong>
-            <span className="capacidad-persona-stat">{destino.carga.avance}% avance promedio · {destino.carga.asignaciones} tareas asignadas</span>
+            <span className="capacidad-persona-stat">{destino.carga.asignaciones} tareas asignadas en total · sin fecha de fallo próxima</span>
             <div className="capacidad-expedientes">
               <button className="capacidad-expediente" onClick={() => onDetail(destino.expediente.item)}>
                 <span className="capacidad-expediente-dep">{destino.expediente.item.dependencia}</span>
                 <strong>{destino.expediente.item.nombre}</strong>
-                <span className="capacidad-expediente-detalle">{destino.expediente.tareas.length} tarea abierta · avance más alto del grupo</span>
+                <span className="capacidad-expediente-detalle">{destino.expediente.tareas.length} tarea{destino.expediente.tareas.length === 1 ? '' : 's'} abierta{destino.expediente.tareas.length === 1 ? '' : 's'} · {luisAbiertas82kmAvance}% avance promedio · sin fecha de fallo</span>
               </button>
             </div>
           </div>
@@ -452,16 +442,7 @@ function CapacidadVsDemanda({ onDetail }: { onDetail: (item: Licitacion) => void
           <div className="capacidad-propuesta-copy">
             <p className="section-kicker">PROPUESTA DE REASIGNACIÓN</p>
             <strong className="capacidad-propuesta-title">Reasignar una tarea económica de {sobrecargada.nombre} a {destino.nombre}</strong>
-            <p>Mover <strong>&quot;{tareaAMover.nombre}&quot;</strong> del expediente <strong>{tramoIIICapacidad.numero}</strong>, con fallo el {tramoIIICapacidad.fallo}. {destino.nombre} registra {luisAbiertas82km.length ? km82Capacidad.tareas!.find((t) => t.nombre === luisAbiertas82km[0].nombre)?.avance : 0}% de avance en su única tarea abierta.</p>
-          </div>
-          <div className="capacidad-propuesta-action">
-            {estado === 'pendiente' && <div className="capacidad-actions">
-              <p className="decision-demo-note"><Info /> Simulación local: no modifica el Excel de Gantt.</p>
-              <Button className="capacidad-approve" onClick={() => setEstado('aprobado')}><ThumbsUp /> Simular aprobación</Button>
-              <Button variant="outline" onClick={() => setEstado('rechazado')}><ThumbsDown /> Simular rechazo</Button>
-            </div>}
-            {estado === 'aprobado' && <div className="capacidad-decision approved"><CheckCircle2 /><div><strong>Simulación de aprobación</strong><span>{fecha} · decisión temporal de esta sesión; la asignación de origen no cambió.</span></div></div>}
-            {estado === 'rechazado' && <div className="capacidad-decision rejected"><X /><div><strong>Simulación de rechazo</strong><span>{fecha} · decisión temporal de esta sesión; no se guardó un motivo ni se cambió el origen.</span></div></div>}
+            <p>Mover <strong>&quot;{tareaAMover.nombre}&quot;</strong> del expediente <strong>{tramoIIICapacidad.numero}</strong>, con fallo el {tramoIIICapacidad.fallo}. {destino.nombre} registra {luisAbiertas82kmAvance}% de avance promedio en sus {luisAbiertas82km.length} tareas abiertas del expediente 82km, sin fecha de fallo registrada.</p>
           </div>
         </div>
       </CardContent>
@@ -469,7 +450,29 @@ function CapacidadVsDemanda({ onDetail }: { onDetail: (item: Licitacion) => void
   </section>;
 }
 
-function LicitacionesView(props: { query:string; setQuery:(v:string)=>void; stateFilter:'Todos'|Estado; setStateFilter:(v:'Todos'|Estado)=>void; entityFilter:string; setEntityFilter:(v:string)=>void; page:number; setPage:(v:number)=>void; filtered:Licitacion[]; onDetail:(v:Licitacion)=>void }) {
+// Insights del directorio completo — fijos sobre el corte, no cambian con los filtros de la tabla.
+// Derivados de licitaciones/hitos/carga reales, nada hardcodeado por caso.
+const directorioInsights = (() => {
+  const entidadTop = [...porEntidad].sort((a, b) => b.value - a.value)[0];
+  const pctEntidadTop = Math.round((entidadTop.value / fuentes.totalProcesosUnicos) * 100);
+
+  const conFallo = licitaciones.filter((item) => item.estado === 'Fallo').length;
+  const enConstruccion = licitaciones.filter((item) => item.estado === 'Construcción').length;
+
+  const hitoMasProximo = hitos[0];
+  const expedienteHito = hitoMasProximo ? licitacionPorId(hitoMasProximo.id) : undefined;
+
+  const cargaTop = [...carga].sort((a, b) => b.asignaciones - a.asignaciones)[0];
+
+  return [
+    { label: 'Concentración', title: `${entidadTop.value} procesos en ${entidadTop.name}`, detail: `${pctEntidadTop}% de los ${fuentes.totalProcesosUnicos} procesos únicos del corte.` },
+    { label: 'Etapa principal', title: `${enConstruccion} expedientes en construcción`, detail: conFallo > 0 ? `${conFallo} más ya están en fallo (ganador resuelto).` : 'La etapa con más volumen del portafolio.' },
+    ...(expedienteHito ? [{ label: 'Fallo más próximo', title: `${expedienteHito.dependencia} · ${hitoMasProximo!.fecha}`, detail: expedienteHito.nombre, critical: true }] : []),
+    { label: 'Mayor carga de equipo', title: `${cargaTop.nombre} con ${cargaTop.asignaciones} tareas`, detail: `${cargaTop.avance}% de avance promedio en lo asignado.` },
+  ];
+})();
+
+function LicitacionesView(props: { query:string; setQuery:(v:string)=>void; stateFilter:'Todos'|Estado; setStateFilter:(v:'Todos'|Estado)=>void; entityFilter:string; setEntityFilter:(v:string)=>void; page:number; setPage:(v:number)=>void; filtered:Licitacion[]; onDetail:(v:Licitacion)=>void; onlyHitos:boolean; clearOnlyHitos:()=>void }) {
   const entities = ['Todas', ...Array.from(new Set(licitaciones.map((item) => item.entidad)))];
   const pageSize = 25;
   const pageCount = Math.ceil(props.filtered.length / pageSize);
@@ -479,10 +482,19 @@ function LicitacionesView(props: { query:string; setQuery:(v:string)=>void; stat
   const lastVisible = Math.min(firstVisible + pageSize, props.filtered.length);
   const activeProcesses = licitaciones.filter((item) => item.estado === 'En trabajo' || item.estado === 'Construcción').length;
   const datedDecisions = hitos.length;
-  const hasFilters = props.query.length > 0 || props.stateFilter !== 'Todos' || props.entityFilter !== 'Todas';
-  const clearFilters = () => { props.setQuery(''); props.setStateFilter('Todos'); props.setEntityFilter('Todas'); };
+  const hasFilters = props.query.length > 0 || props.stateFilter !== 'Todos' || props.entityFilter !== 'Todas' || props.onlyHitos;
+  const clearFilters = () => { props.setQuery(''); props.setStateFilter('Todos'); props.setEntityFilter('Todas'); props.clearOnlyHitos(); };
   return <section className="list-view">
     <div className="directory-heading"><div><p className="section-kicker">CONTROL DE LICITACIONES</p><h2>Directorio de procesos</h2><p>Encuentra un expediente y revisa su situación operativa en un solo lugar.</p></div><section className="directory-stats" aria-label="Resumen del directorio"><div><span>Procesos del corte</span><strong>{fuentes.totalProcesosUnicos}</strong></div><div><span>En ejecución</span><strong>{activeProcesses}</strong></div><div className="risk"><span>Fallos con fecha</span><strong>{datedDecisions}</strong></div></section></div>
+
+    <section className="insight-stack directory-insights" aria-label="Datos clave del portafolio">
+      <h4 className="insight-stack-heading">Datos para revisar</h4>
+      <div className="insight-ledger">
+        {directorioInsights.map((insight) => <article className={`insight-record ${insight.critical ? 'critical' : ''}`} key={insight.label}><span>{insight.label}</span><div><strong>{insight.title}</strong><p>{insight.detail}</p></div></article>)}
+      </div>
+    </section>
+
+    {props.onlyHitos && <div className="active-hitos-filter"><AlertTriangle /><span>Mostrando solo los {datedDecisions} expedientes con fallo próximo</span><button onClick={props.clearOnlyHitos}>Quitar filtro</button></div>}
     <div className="directory-toolbar">
       <div className="search-field"><Search /><Input aria-label="Buscar licitaciones" value={props.query} onChange={(event) => props.setQuery(event.target.value)} placeholder="Buscar por proceso, dependencia o entidad…" />{props.query && <button className="clear-search" aria-label="Borrar búsqueda" onClick={() => props.setQuery('')}><X /></button>}</div>
       <section className="filter-group" aria-label="Filtros del directorio"><span className="filter-label"><Filter />Filtrar</span><div className="select-field"><Select value={props.stateFilter} onValueChange={(value) => props.setStateFilter(value as 'Todos'|Estado)}><SelectTrigger aria-label="Filtrar por estado"><SelectValue /></SelectTrigger><SelectContent>{['Todos','Detectada','Filtrada','En trabajo','Construcción','Fallo'].map((option) => <SelectItem value={option} key={option}>{option}</SelectItem>)}</SelectContent></Select></div>
@@ -598,11 +610,76 @@ function formatSourceDate(value: string) {
   return `${Number(day)} ${months[Number(month) - 1]} ${year}`;
 }
 
+// Insights derivados de las tareas reales del expediente — nada hardcodeado por caso,
+// así que aplican igual de bien a cualquier expediente que tenga tareas de Gantt.
+function expedienteInsights(tareas: Tarea[]) {
+  if (!tareas.length) return [];
+  const insights: { label: string; title: string; detail: string; critical?: boolean }[] = [];
+
+  const sinIniciar = tareas.filter((t) => t.avance === 0);
+  if (sinIniciar.length) {
+    const porArea = new Map<string, number>();
+    sinIniciar.forEach((t) => porArea.set(t.area, (porArea.get(t.area) ?? 0) + 1));
+    const areasSinIniciar = [...porArea.entries()].sort((a, b) => b[1] - a[1]);
+    const [areaTop, countTop] = areasSinIniciar[0];
+    const empatadas = areasSinIniciar.filter(([, count]) => count === countTop).length > 1;
+    const dondeTexto = empatadas
+      ? `Repartidas entre ${areasSinIniciar.map(([area]) => area.toLowerCase()).join(' y ')}`
+      : `Concentradas en el área ${areaTop.toLowerCase()}`;
+    insights.push({
+      label: 'Sin iniciar', critical: true,
+      title: `${sinIniciar.length} tarea${sinIniciar.length === 1 ? '' : 's'} en 0%`,
+      detail: `${dondeTexto}. Conviene confirmar responsable y fecha antes de que se acumulen.`,
+    });
+  }
+
+  const areas = Array.from(new Set(tareas.map((t) => t.area)));
+  if (areas.length > 1) {
+    const promedios = areas.map((area) => {
+      const deArea = tareas.filter((t) => t.area === area);
+      return { area, avg: Math.round(deArea.reduce((s, t) => s + t.avance, 0) / deArea.length) };
+    }).sort((a, b) => a.avg - b.avg);
+    const rezagada = promedios[0];
+    const adelantada = promedios[promedios.length - 1];
+    if (adelantada.avg - rezagada.avg >= 15) {
+      insights.push({
+        label: 'Desbalance entre áreas',
+        title: `${rezagada.area} va ${adelantada.avg - rezagada.avg} pts atrás de ${adelantada.area}`,
+        detail: `${rezagada.area} promedia ${rezagada.avg}% frente a ${adelantada.avg}% en ${adelantada.area}.`,
+      });
+    }
+  }
+
+  const porResponsable = new Map<string, Tarea[]>();
+  tareas.forEach((t) => porResponsable.set(t.responsable, [...(porResponsable.get(t.responsable) ?? []), t]));
+  const [responsableTop, tareasTop] = [...porResponsable.entries()].sort((a, b) => b[1].length - a[1].length)[0];
+  if (porResponsable.size > 1) {
+    const avgTop = Math.round(tareasTop.reduce((s, t) => s + t.avance, 0) / tareasTop.length);
+    insights.push({
+      label: 'Mayor carga',
+      title: `${responsableTop} lleva ${tareasTop.length} de ${tareas.length} tareas`,
+      detail: `${avgTop}% de avance promedio en lo que tiene asignado en este expediente.`,
+    });
+  }
+
+  const enProgreso = tareas.filter((t) => t.avance > 0 && t.avance < 100).sort((a, b) => a.avance - b.avance)[0];
+  if (enProgreso) {
+    insights.push({
+      label: 'Más cerca de cerrar',
+      title: `"${enProgreso.nombre}" al ${enProgreso.avance}%`,
+      detail: `A cargo de ${enProgreso.responsable}, área ${enProgreso.area.toLowerCase()}.`,
+    });
+  }
+
+  return insights.slice(0, 4);
+}
+
 function DetailView({ item, onBack }: { item:Licitacion; onBack:()=>void }) {
   const tareas = item.tareas ?? [];
   const average = tareas.length ? Math.round(tareas.reduce((sum,task) => sum + task.avance,0) / tareas.length) : 0;
   const completed = tareas.filter((task) => task.avance === 100).length;
   const owners = Array.from(new Set(tareas.map((task) => task.responsable)));
+  const insights = expedienteInsights(tareas);
   const milestoneDates = [
     { label:'Aclaraciones', value:item.aclaraciones },
     { label:'Presentación', value:item.apertura },
@@ -624,10 +701,17 @@ function DetailView({ item, onBack }: { item:Licitacion; onBack:()=>void }) {
     </article>
 
     <div className="milestone-strip" aria-label="Fechas clave del proceso">
-      {milestoneDates.map((date, index) => <div className="milestone" key={date.label}>
+      {milestoneDates.map((date, index) => <div className="milestone" key={date.label} title={date.label === 'Fallo' ? 'Fallo: fecha en que la dependencia resuelve y da a conocer al ganador' : undefined}>
         <span className="milestone-index">{index + 1}</span><div><span>{date.label}</span><strong>{date.value}</strong></div>
       </div>)}
     </div>
+
+    {insights.length > 0 && <section className="insight-stack detail-insights" aria-label="Datos clave del expediente">
+      <h4 className="insight-stack-heading">Datos para revisar</h4>
+      <div className="insight-ledger">
+        {insights.map((insight) => <article className={`insight-record ${insight.critical ? 'critical' : ''}`} key={insight.label}><span>{insight.label}</span><div><strong>{insight.title}</strong><p>{insight.detail}</p></div></article>)}
+      </div>
+    </section>}
 
     <div className="detail-layout">
       <aside className="detail-side">
