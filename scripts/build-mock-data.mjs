@@ -171,7 +171,7 @@ const STAGE_COLOR = {
 };
 const stagesConColor = stages.map((s) => ({ ...s, color: STAGE_COLOR[s.label] }));
 
-// --- 3. Ofertas (universo separado, tal como lo pidió Alberto) ---
+// --- 3. Ofertas (universo separado, tal como lo pidió Usuario) ---
 const ofertas = (raw.ofertas ?? []).map((o) => ({
   id: o.id,
   empresa: o.empresa,

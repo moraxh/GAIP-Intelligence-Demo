@@ -250,8 +250,8 @@ export default function Home() {
         <ModuleBar activo={moduloActivo} onLicitaciones={() => navigate('panorama')} onGris={(key) => setModuloAbierto(key)} />
         <div className="sidebar-footer">
           <div className="profile-card">
-            <span className="avatar">AG</span>
-            <span className="profile-copy"><strong>Alberto García</strong><small>Dirección</small></span>
+            <span className="avatar">US</span>
+            <span className="profile-copy"><strong>Usuario</strong><small>Dirección</small></span>
           </div>
         </div>
       </aside>
