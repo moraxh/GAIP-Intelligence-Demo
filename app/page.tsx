@@ -24,18 +24,6 @@ type View = 'panorama' | 'licitaciones' | 'ofertas' | 'detalle';
 type ChatKey = 'vence' | 'avance' | 'oferta' | 'cruce';
 type ModelContext = { registerTool: (tool: Record<string, unknown>, options?: { signal?: AbortSignal }) => void | Promise<void> };
 
-// --- Datos visibles del panorama en esta demostración. ---
-// Pieza 1 del Plan_Demo_v2.md — cada widget del panorama depende de una fuente concreta.
-type FuenteKey = 'comprasmx' | 'gantt' | 'ofertas' | 'historico';
-type FuentesActivas = Record<FuenteKey, boolean>;
-
-const fuenteInfo: Record<FuenteKey, { label: string; corto: string; detalle: string }> = {
-  comprasmx: { label: 'ComprasMX', corto: 'ComprasMX', detalle: 'Plataforma de licitaciones de Beto: descarga, filtro y listado' },
-  gantt: { label: 'Excel de Gantt', corto: 'Gantt', detalle: 'Seguimiento operativo por expediente: tareas, avance y responsable' },
-  ofertas: { label: 'Excel de Ofertas', corto: 'Ofertas', detalle: 'Seguimiento comercial: empresa, monto y estatus' },
-  historico: { label: 'Histórico (60 cortes)', corto: 'Histórico', detalle: '3,217 expedientes detectados en 60 días de cortes diarios' },
-};
-
 // --- Pieza 5: barra de módulos de empresa. Licitaciones es UN módulo conectado; RH/Finanzas/Obra
 // son módulos aparte, no fuentes de datos — comparten el mismo patrón visual "gris = no conectado"
 // que las fuentes del mapa, pero viven a nivel de producto/empresa, no de dato.
@@ -144,11 +132,6 @@ export default function Home() {
   const [entityFilter, setEntityFilter] = useState('Todas');
   const [tenderPage, setTenderPage] = useState(0);
   const [chatOpen, setChatOpen] = useState(false);
-  // Pieza 1: solo ComprasMX prendido por defecto — así arranca la demo mostrando lo que Beto ya tiene.
-  const [fuentesActivas, setFuentesActivas] = useState<FuentesActivas>({
-    comprasmx: true, gantt: false, ofertas: false, historico: false,
-  });
-  const toggleFuente = (key: FuenteKey) => setFuentesActivas((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const [moduloAbierto, setModuloAbierto] = useState<string | null>(null);
 
@@ -256,9 +239,8 @@ export default function Home() {
         </header>
 
         <div className="content">
-          {view === 'panorama' && <Dashboard fuentesActivas={fuentesActivas} onToggle={toggleFuente} onAll={() => navigate('licitaciones')} onDetail={openDetail} />}
-          {view === 'licitaciones' && (fuentesActivas.comprasmx
-            ? <LicitacionesView
+          {view === 'panorama' && <Dashboard onAll={() => navigate('licitaciones')} onDetail={openDetail} />}
+          {view === 'licitaciones' && <LicitacionesView
                 query={query}
                 setQuery={(value) => { setQuery(value); setTenderPage(0); }}
                 stateFilter={stateFilter}
@@ -269,8 +251,7 @@ export default function Home() {
                 setPage={setTenderPage}
                 filtered={filtered}
                 onDetail={openDetail}
-              />
-            : <ViewLocked fuente="comprasmx" onToggle={() => toggleFuente('comprasmx')} />)}
+              />}
           {view === 'ofertas' && <OfertasView />}
           {view === 'detalle' && selected && <DetailView item={selected} onBack={() => navigate('licitaciones')} />}
         </div>
@@ -324,94 +305,48 @@ function GraySourceDialog({ label, hoy, con, onClose }: { label: string; hoy: st
   </Dialog>;
 }
 
-function FuentesToggleBar({ fuentesActivas, onToggle }: { fuentesActivas: FuentesActivas; onToggle: (key: FuenteKey) => void }) {
-  const keys: FuenteKey[] = ['comprasmx', 'gantt', 'ofertas', 'historico'];
-  const activeCount = keys.filter((k) => fuentesActivas[k]).length;
-  return <section className="fuentes-toggle-bar" aria-label="Datos visibles en el panorama">
-    <div className="fuentes-toggle-label"><span className="source-status-icon"><Database /></span><span><strong>Datos que se muestran</strong><small>Demostración · {activeCount} de {keys.length} fuentes visibles</small></span></div>
-    <div className="fuentes-toggle-list">
-      {keys.map((key) => <button
-        key={key}
-        className={`fuente-toggle ${fuentesActivas[key] ? 'on' : 'off'}`}
-        aria-pressed={fuentesActivas[key]}
-        aria-label={`${fuentesActivas[key] ? 'Ocultar' : 'Mostrar'} datos de ${fuenteInfo[key].corto}`}
-        onClick={() => onToggle(key)}
-      ><span className="fuente-toggle-dot" />{fuenteInfo[key].corto}<span className="fuente-toggle-state">{fuentesActivas[key] ? 'Visible' : 'Oculta'}</span></button>)}
-    </div>
-  </section>;
-}
-
-function LockedWidget({ fuente }: { fuente: FuenteKey }) {
-  return <Card className="executive-card locked-widget">
-    <CardContent><Lock /><strong>Requiere {fuenteInfo[fuente].label}</strong><span>Actívala en la barra de fuentes de arriba para ver este widget.</span></CardContent>
-  </Card>;
-}
-
-function ViewLocked({ fuente, onToggle }: { fuente: FuenteKey; onToggle: () => void }) {
-  return <div className="view-locked">
-    <Lock />
-    <strong>{fuenteInfo[fuente].label} está apagada</strong>
-    <span>Esta vista depende de esa fuente. Actívala para verla con datos reales.</span>
-    <Button onClick={onToggle}>Activar {fuenteInfo[fuente].corto}</Button>
-  </div>;
-}
-
-function Dashboard({ fuentesActivas, onToggle, onAll, onDetail }: { fuentesActivas: FuentesActivas; onToggle: (key: FuenteKey) => void; onAll: () => void; onDetail: (item: Licitacion) => void }) {
+function Dashboard({ onAll, onDetail }: { onAll: () => void; onDetail: (item: Licitacion) => void }) {
   const expedientesConTareas = licitaciones.filter((item) => item.tareas?.length).length;
   const metrics = [
-    { label:'Registros duplicados', value: String(fuentes.totalDuplicados), detail:'Diferencia entre registros recibidos y procesos únicos', icon:FileStack, fuente:'comprasmx' as FuenteKey },
-    { label:'Expedientes históricos', value: historicoResumen.totalExpedientes.toLocaleString('es-MX'), detail:`${historicoResumen.totalSnapshots} cortes consolidados`, icon:Database, fuente:'historico' as FuenteKey },
-    { label:'Expedientes con tareas', value:String(expedientesConTareas), detail:'Con avances registrados en la fuente', icon:Gauge, fuente:'gantt' as FuenteKey },
-    { label:'Oferta en seguimiento', value: oferta.monto, detail:`${oferta.empresa} · ${oferta.proyecto}`, icon:TrendingUp, fuente:'ofertas' as FuenteKey },
+    { label:'Registros duplicados', value: String(fuentes.totalDuplicados), detail:'Diferencia entre registros recibidos y procesos únicos', icon:FileStack },
+    { label:'Expedientes históricos', value: historicoResumen.totalExpedientes.toLocaleString('es-MX'), detail:`${historicoResumen.totalSnapshots} cortes consolidados`, icon:Database },
+    { label:'Expedientes con tareas', value:String(expedientesConTareas), detail:'Con avances registrados en la fuente', icon:Gauge },
+    { label:'Oferta en seguimiento', value: oferta.monto, detail:`${oferta.empresa} · ${oferta.proyecto}`, icon:TrendingUp },
   ];
   const hitoDestacado = hitos[0] ? licitacionPorId(hitos[0].id) : undefined;
   const notasSinExpediente = notas.filter((nota) => !nota.ligadaA).length;
   return <div className="executive-dashboard">
     <div className="page-heading"><div><h2>Resumen ejecutivo</h2><p>Corte operativo al {fuentes.corte}.</p></div><Button variant="outline" onClick={onAll}>Abrir directorio <ChevronRight /></Button></div>
 
-    <FuentesToggleBar fuentesActivas={fuentesActivas} onToggle={onToggle} />
-
-    {fuentesActivas.comprasmx ? <section className="consolidation-story" aria-label="Estado del corte operativo">
+    <section className="consolidation-story" aria-label="Estado del corte operativo">
       <div className="story-intro"><span>ESTADO DEL CORTE</span><strong><b>{fuentes.totalProcesosUnicos}</b> procesos únicos</strong><small>Consolidados desde {fuentes.totalListasOrigen} listas de origen</small></div>
       <div className="story-step"><div><span>Registros recibidos</span><strong>{fuentes.totalRegistrosRecibidos}</strong><small>en el corte actual</small></div></div>
       <div className="story-step"><div><span>Duplicados detectados</span><strong>{fuentes.totalDuplicados}</strong><small>conciliados automáticamente</small></div></div>
       <div className="story-step featured"><div><span>Cobertura</span><strong>{Math.round((fuentes.totalProcesosUnicos / fuentes.totalRegistrosRecibidos) * 100)}%</strong><small>de registros únicos</small></div></div>
       {hitoDestacado && <button onClick={() => onDetail(hitoDestacado)}><span className="story-alert-icon"><AlertTriangle /></span><div><small>REQUIERE ATENCIÓN</small><strong>{hitos.length} hitos próximos</strong><span>Revisar prioridades del corte</span></div><ChevronRight /></button>}
-    </section> : <section className="source-off-message" aria-live="polite">
-      <Database aria-hidden="true" />
-      <div><strong>ComprasMX está oculta en esta vista</strong><span>Activa sus datos para consultar el directorio, los hitos y el resumen del corte.</span></div>
-      <Button variant="outline" onClick={() => onToggle('comprasmx')}>Mostrar datos de ComprasMX</Button>
-    </section>}
-
-    <section className="metric-grid">
-      {metrics.map((metric) => fuentesActivas[metric.fuente]
-        ? <Card className="executive-metric" key={metric.label}><CardHeader><div className="metric-glyph"><metric.icon /></div><span>{metric.label}</span></CardHeader><CardContent><strong>{metric.value}</strong><p>{metric.detail}</p></CardContent></Card>
-        : <Card className="executive-metric locked" key={metric.label}><CardHeader><div className="metric-glyph"><Lock /></div><span>{metric.label}</span></CardHeader><CardContent><strong className="locked-value">···</strong><p>Requiere {fuenteInfo[metric.fuente].label}</p></CardContent></Card>)}
     </section>
 
-    {fuentesActivas.comprasmx && <AiExecutiveInsights fuentesActivas={fuentesActivas} onDetail={onDetail} />}
+    <section className="metric-grid">
+      {metrics.map((metric) => <Card className="executive-metric" key={metric.label}><CardHeader><div className="metric-glyph"><metric.icon /></div><span>{metric.label}</span></CardHeader><CardContent><strong>{metric.value}</strong><p>{metric.detail}</p></CardContent></Card>)}
+    </section>
+
+    <AiExecutiveInsights onDetail={onDetail} />
 
     <section className="dashboard-card-columns">
       <div className="dashboard-card-column">
-        {fuentesActivas.comprasmx ? <>
         <Card className="executive-card pipeline-card"><CardHeader><div><CardTitle>Portafolio por etapa</CardTitle><p>Conteo de registros en listas de origen por etapa</p></div><Button variant="ghost" size="sm" onClick={onAll}>Abrir listado</Button></CardHeader><CardContent><div className="pipeline-chart">{stages.map((stage) => <div className="pipeline-row" key={stage.label}><div><span>{stage.label}</span><strong>{stage.value}</strong></div><div className="pipeline-bar"><i style={{ width:`${Math.max(12, stage.value * 2.25)}%`, background:stage.color }} /></div></div>)}</div><div className="portfolio-note"><Database /><span>Los conteos pueden incluir procesos presentes en más de una lista.</span></div></CardContent></Card>
         <Card className="executive-card entity-card"><CardHeader><div><CardTitle>Procesos por entidad</CardTitle><p>Muestra operativa disponible</p></div><MapPin /></CardHeader><CardContent><div className="bar-chart">{entityBars.map((bar) => <div className="bar-row" key={bar.name}><span>{bar.name}</span><div><i style={{ width:`${(bar.value / entityBars[0].value) * 100}%` }} /></div><strong>{bar.value}</strong></div>)}</div></CardContent></Card>
-        </> : <LockedWidget fuente="comprasmx" />}
-        {fuentesActivas.historico && <HistoricoAnalisis />}
+        <HistoricoAnalisis />
       </div>
       <div className="dashboard-card-column">
-        {fuentesActivas.comprasmx ? <>
         <Card className="executive-card milestones-card"><CardHeader><div><CardTitle>Próximos fallos</CardTitle><p>Fechas reportadas al corte {fuentes.corte}</p></div><CalendarDays /></CardHeader><CardContent><div className="deadline-list">{hitos.map((hito) => { const item = licitacionPorId(hito.id); const [dia, mes] = hito.fecha.split(' '); return <button className="deadline" key={item.id} onClick={() => onDetail(item)}><div className="date risk"><strong>{dia}</strong><span>{mes.toUpperCase()}</span></div><div><strong>{item.dependencia}</strong><span>{item.nombre}</span></div><ChevronRight /></button>; })}</div></CardContent></Card>
-        </> : <LockedWidget fuente="comprasmx" />}
-        {fuentesActivas.gantt
-          ? <Card className="executive-card workload-card"><CardHeader><div><CardTitle>Avance por responsable</CardTitle><p>Promedio de tareas asignadas · fuente: Excel de Gantt</p></div><Users /></CardHeader><CardContent><div className="workload-list">{carga.map((person) => <div className="workload" key={person.nombre}><div><strong>{person.nombre}</strong><span>{person.asignaciones} tareas</span></div><b>{person.avance}%</b><Progress value={person.avance} /></div>)}</div></CardContent></Card>
-          : <LockedWidget fuente="gantt" />}
+        <Card className="executive-card workload-card"><CardHeader><div><CardTitle>Avance por responsable</CardTitle><p>Promedio de tareas asignadas · fuente: Excel de Gantt</p></div><Users /></CardHeader><CardContent><div className="workload-list">{carga.map((person) => <div className="workload" key={person.nombre}><div><strong>{person.nombre}</strong><span>{person.asignaciones} tareas</span></div><b>{person.avance}%</b><Progress value={person.avance} /></div>)}</div></CardContent></Card>
       </div>
     </section>
 
-    {fuentesActivas.gantt && fuentesActivas.comprasmx && <CapacidadVsDemanda onDetail={onDetail} />}
+    <CapacidadVsDemanda onDetail={onDetail} />
 
-    {notas.length > 0 && fuentesActivas.gantt && <section className="notes-section" aria-label="Notas capturadas">
+    {notas.length > 0 && <section className="notes-section" aria-label="Notas capturadas">
       <details className="notes-disclosure">
         <summary>
           <span className="notes-disclosure-icon"><NotebookPen /></span>
@@ -429,34 +364,24 @@ function Dashboard({ fuentesActivas, onToggle, onAll, onDetail }: { fuentesActiv
 
 // Lectura editorial prototipo: el contenido está hardcodeado a partir del corte real.
 // Cuando exista el servicio de IA, esta superficie puede conservarse y sustituir solo la narrativa.
-function AiExecutiveInsights({ fuentesActivas, onDetail }: { fuentesActivas: FuentesActivas; onDetail: (item: Licitacion) => void }) {
+function AiExecutiveInsights({ onDetail }: { onDetail: (item: Licitacion) => void }) {
   const alerta = licitacionPorId('XLS-SIOPESMA0BLP05692026');
-  const primerFallo = hitos[0]?.fecha ?? 'próximamente';
-  const expedienteProximo = hitos[0] ? licitacionPorId(hitos[0].id) : undefined;
-  const titulo = fuentesActivas.gantt
-    ? 'Puerto Vallarta vence el 17 de septiembre.'
-    : `El primer fallo está fechado para el ${primerFallo}.`;
   return <section className="ai-insights" aria-labelledby="ai-insights-title">
     <div className="ai-briefing">
       <div className="ai-briefing-heading">
         <div className="briefing-meta"><span>Nota de licitaciones</span><time>{fuentes.corte}</time></div>
-        <h3 id="ai-insights-title">{titulo}</h3>
+        <h3 id="ai-insights-title">Puerto Vallarta vence el 17 de septiembre.</h3>
       </div>
-      <p>{fuentesActivas.gantt
-        ? <>El expediente registra <strong>ocho tareas sin iniciar</strong>. Confirma responsables y vigencia del calendario antes de reasignar trabajo.</>
-        : <>El corte incluye <strong>{hitos.length} fechas de fallo próximas</strong>. Activa Excel de Gantt para consultar tareas y responsables por expediente.</>}
-      </p>
+      <p>El expediente registra <strong>ocho tareas sin iniciar</strong>. Confirma responsables y vigencia del calendario antes de reasignar trabajo.</p>
       <div className="ai-briefing-footer"><span><Database /> ComprasMX · corte {fuentes.corte}</span><button onClick={() => onDetail(alerta)}>Abrir expediente <ChevronRight /></button></div>
     </div>
     <div className="insight-stack" aria-label="Datos clave del corte">
       <h4 className="insight-stack-heading">Datos para revisar</h4>
       <div className="insight-ledger">
-        {fuentesActivas.gantt
-          ? <article className="insight-record critical"><span>Avance</span><div><strong>8 tareas sin iniciar</strong><p>Puerto Vallarta · fallo 17 sep · confirma responsables.</p></div></article>
-          : <article className="insight-record"><span>Próximo fallo</span><div><strong>{primerFallo} · {expedienteProximo?.dependencia ?? 'Sin dependencia'}</strong><p>Revisa los requisitos de entrega del expediente.</p></div></article>}
+        <article className="insight-record critical"><span>Avance</span><div><strong>8 tareas sin iniciar</strong><p>Puerto Vallarta · fallo 17 sep · confirma responsables.</p></div></article>
         <article className="insight-record"><span>Concentración</span><div><strong>33 procesos · CDMX y Jalisco</strong><p>52% de los 64 procesos únicos del corte.</p></div></article>
         <article className="insight-record"><span>Etapa principal</span><div><strong>40 registros · Construcción</strong><p>49% de los registros de origen; algunos pueden aparecer en más de una lista.</p></div></article>
-        {fuentesActivas.gantt && <article className="insight-record"><span>Carga por revisar</span><div><strong>44 tareas con avance menor a 45%</strong><p>Alicia, Jemo y Javier/Brenda concentran esa carga.</p></div></article>}
+        <article className="insight-record"><span>Carga por revisar</span><div><strong>44 tareas con avance menor a 45%</strong><p>Alicia, Jemo y Javier/Brenda concentran esa carga.</p></div></article>
       </div>
     </div>
   </section>;
