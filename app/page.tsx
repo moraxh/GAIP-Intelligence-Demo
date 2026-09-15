@@ -154,7 +154,6 @@ export default function Home() {
 
   const openDetail = (item: Licitacion) => { setSelected(item); setView('detalle'); };
   const navigate = (next: View) => { setView(next); if (next !== 'detalle') setSelected(null); };
-  const activeNavOffset = (view === 'panorama' ? 0 : view === 'ofertas' ? 2 : 1) * 48;
   const moduloActivo: ModuloKey = 'licitaciones';
   const modulosGris = modulosNoConectados.find((m) => m.key === moduloAbierto);
 
@@ -197,10 +196,20 @@ export default function Home() {
     return () => lifecycle.abort();
   }, []);
 
+  useEffect(() => {
+    const openCommandSearch = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setChatOpen(true);
+      }
+    };
+    window.addEventListener('keydown', openCommandSearch);
+    return () => window.removeEventListener('keydown', openCommandSearch);
+  }, []);
+
   return (
     <main className="app-shell">
       <a className="skip-link" href="#main-content">Saltar al contenido</a>
-      <ModuleBar activo={moduloActivo} onLicitaciones={() => navigate('panorama')} onGris={(key) => setModuloAbierto(key)} />
       {modulosGris && <GraySourceDialog label={modulosGris.label} hoy={modulosGris.hoy} con={modulosGris.con} onClose={() => setModuloAbierto(null)} />}
       <aside className="sidebar">
         <div className="brand-lockup">
@@ -209,8 +218,7 @@ export default function Home() {
         </div>
         <nav aria-label="Navegación principal">
           <p className="nav-section-heading">Operación</p>
-          <div className="nav-items" style={{ '--nav-offset': `${activeNavOffset}px` } as React.CSSProperties}>
-            <span className="nav-highlight" aria-hidden="true" />
+          <div className="nav-items">
             <Button variant="ghost" aria-label="Resumen ejecutivo" aria-current={view === 'panorama' ? 'page' : undefined} className={`nav-item ${view === 'panorama' ? 'active' : ''}`} onClick={() => navigate('panorama')}>
               <Gauge className="nav-icon" /><span className="nav-copy">Resumen</span>
             </Button>
@@ -222,6 +230,7 @@ export default function Home() {
             </Button>
           </div>
         </nav>
+        <ModuleBar activo={moduloActivo} onLicitaciones={() => navigate('panorama')} onGris={(key) => setModuloAbierto(key)} />
         <div className="sidebar-footer">
           <div className="profile-card">
             <span className="avatar">AG</span>
@@ -233,10 +242,12 @@ export default function Home() {
       <section className="workspace" id="main-content" tabIndex={-1}>
         <header className="topbar">
           <div>
-            <div className="eyebrow">INTELIGENCIA OPERATIVA</div>
             <h1>{view === 'panorama' ? 'Panorama operativo' : view === 'licitaciones' ? 'Licitaciones unificadas' : view === 'ofertas' ? 'Ofertas' : 'Detalle del expediente'}</h1>
           </div>
           <div className="top-actions">
+            <button className="command-search" onClick={() => setChatOpen(true)} aria-label="Abrir consultas operativas">
+              <Search /><span>Buscar o consultar la operación</span><kbd>⌘ K</kbd>
+            </button>
             <div className="data-status">
               <span className="data-mark"><CalendarDays /></span>
               <div className="data-status-copy"><strong>Corte de datos</strong><time>{fuentes.corte}</time></div>
@@ -265,7 +276,7 @@ export default function Home() {
         </div>
       </section>
 
-      <button className="assistant-fab" onClick={() => setChatOpen(true)} aria-label="Abrir consultas operativas"><MessageCircle /><span>Consultas operativas</span></button>
+      {!chatOpen && <button className="assistant-fab" onClick={() => setChatOpen(true)} aria-label="Abrir consultas operativas"><MessageCircle /><span>Consultas operativas</span></button>}
       <IntelligencePanel open={chatOpen} onOpenChange={setChatOpen} onDetail={openDetail} />
     </main>
   );
@@ -448,7 +459,6 @@ function AiExecutiveInsights({ fuentesActivas, onDetail }: { fuentesActivas: Fue
         {fuentesActivas.gantt && <article className="insight-record"><span>Carga por revisar</span><div><strong>44 tareas con avance menor a 45%</strong><p>Alicia, Jemo y Javier/Brenda concentran esa carga.</p></div></article>}
       </div>
     </div>
-    <p className="ai-disclaimer"><Info /> Lectura editorial precargada para esta demostración. Confirma las fechas y el avance con la fuente.</p>
   </section>;
 }
 
@@ -799,8 +809,8 @@ function IntelligencePanel({ open, onOpenChange, onDetail }: { open:boolean; onO
       <div ref={chatEnd} />
     </div>
     <div className="chat-footer">
-      {messages.length > 0 && <div className="quick-prompts">{(Object.keys(chatAnswers) as ChatKey[]).filter((key) => !messages.some((message) => message.key === key)).slice(0, 2).map((key) => <button key={key} onClick={() => ask(key)}>{questionMeta[key].label}</button>)}</div>}
-      <form className="chat-composer" onSubmit={submit}><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Ej. fallos próximos, oferta, avance…" aria-label="Buscar en las consultas guiadas" /><button type="submit" disabled={!draft.trim()} aria-label="Buscar consulta"><Search /></button></form>
+      {messages.length > 0 && <div className="quick-prompts"><span className="quick-prompts-label">Continuar con</span><div className="quick-prompt-list">{(Object.keys(chatAnswers) as ChatKey[]).filter((key) => !messages.some((message) => message.key === key)).slice(0, 2).map((key) => <button key={key} onClick={() => ask(key)}><span>{questionMeta[key].label}</span><ArrowRight /></button>)}</div></div>}
+      <form className="chat-composer" onSubmit={submit}><Search className="chat-composer-icon" aria-hidden="true" /><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Pregunta por fechas, avance, equipo u ofertas" aria-label="Buscar en las consultas guiadas" /><button type="submit" disabled={!draft.trim()} aria-label="Enviar consulta"><ArrowRight /></button></form>
       <div className="chat-context"><Database /><span>Contenido precargado · corte {fuentes.corte}</span></div>
     </div>
   </SheetContent></Sheet>;
