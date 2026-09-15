@@ -457,13 +457,11 @@
 .gray-source-overlay{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;width:100%;height:100%;max-width:none;max-height:none;margin:0;padding:20px;border:0;background:#17253699;color:inherit}
 .gray-source-overlay::backdrop{display:none}
 .gray-source-panel{width:min(440px,100%);border-radius:10px;background:#fff;box-shadow:0 22px 50px #0d1b2c40;overflow:hidden}
-.gray-source-panel-head{display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--border);background:#f7f9fa}
-.gray-source-panel-head svg:first-child{width:16px;color:#667386}
-.gray-source-panel-head strong{flex:1;font-size:.8rem}
-.gray-source-panel-head button{border:0;background:transparent;color:#7a8797;cursor:pointer;display:flex}
-.gray-source-panel-head button svg{width:16px}
+.gray-source-panel-head{display:flex;flex-direction:row;align-items:center;gap:10px;padding:16px 44px 16px 18px;border-bottom:1px solid var(--border);background:#f7f9fa}
+.gray-source-panel-head svg:first-child{width:16px;flex:none;color:#667386}
+.gray-source-panel-head [data-slot="dialog-title"]{flex:1;font-size:.8rem}
 .gray-source-today{margin:0;padding:16px 18px 6px;color:#3a4b5d;font-size:.78rem;line-height:1.55}
-.gray-source-would{margin:0;padding:0 18px 20px;color:#0f5c8c;font-size:.78rem;line-height:1.55;font-weight:550}
+.gray-source-would{margin:0;padding:0 18px 20px;color:#53636e;font-size:.78rem;line-height:1.55;font-weight:450}
 
 /* ---------------------------------------------------------------------- */
 /* Pieza 3 — Capacidad vs. Demanda + acción con aprobación                 */

@@ -1528,5 +1528,6 @@ export const fuentes = {
   "totalListasOrigen": 5,
   "totalRegistrosRecibidos": 81,
   "totalProcesosUnicos": 64,
-  "totalDuplicados": 17
+  "totalDuplicados": 17,
+  "totalInvitacionesSinProcesar": 247
 };
