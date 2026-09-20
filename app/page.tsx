@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import {
   AlertTriangle, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronLeft,
-  ChevronRight, Database, FileStack, Filter, Gauge, Lock,
+  ChevronRight, Database, FileStack, Filter, FlaskConical, Gauge, GitMerge, Lock,
   MapPin, Search, TrendingUp, Users, X, ArrowRight,
   Building2, Wallet, HardHat, UserRound, MessageCircle, RotateCcw,
 } from 'lucide-react';
@@ -19,9 +19,14 @@ import {
   carga, fuentes, hitos, historicoResumen, licitaciones, oferta, ofertas,
   porEntidad, stages, type Estado, type Licitacion, type Tarea,
 } from '@/lib/mock-data';
+import { FinanzasView } from '@/components/dashboard/finanzas-view';
+import { ObraView } from '@/components/dashboard/obra-view';
+import { MatchingEngineView } from '@/components/dashboard/matching-engine-view';
+import { bondsPorVencer, cobranzaConsolidada, diasEntreFallo, proyectoPorId, proyectos, semaforoDesfase, matchResultPorProyecto, matchResults } from '@/lib/mock-data-finanzas-obra';
+import { fmtMXN, licitacionPorId as licitacionPorIdSafe } from '@/lib/mock-data-helpers';
 
-type View = 'panorama' | 'licitaciones' | 'ofertas' | 'detalle';
-type ChatKey = 'vence' | 'avance' | 'oferta' | 'cruce' | 'sinArrancar' | 'ofertaVsLicitacion' | 'pipeline' | 'moneda';
+type View = 'panorama' | 'licitaciones' | 'ofertas' | 'detalle' | 'finanzas' | 'obra' | 'matching';
+type ChatKey = 'vence' | 'avance' | 'oferta' | 'cruce' | 'sinArrancar' | 'ofertaVsLicitacion' | 'pipeline' | 'moneda' | 'fianzaVence' | 'cobranza' | 'avanceObra' | 'cruceAutomatico' | 'cruceSinVincular';
 type ModelContext = { registerTool: (tool: Record<string, unknown>, options?: { signal?: AbortSignal }) => void | Promise<void> };
 
 // --- Pieza 5: barra de módulos de empresa. Licitaciones es UN módulo conectado; RH/Finanzas/Obra
@@ -34,8 +39,10 @@ const moduloInfo: Record<ModuloKey, { label: string; icon: typeof Building2 }> =
   finanzas: { label: 'Finanzas', icon: Wallet },
   obra: { label: 'Obra', icon: HardHat },
 };
-// RH/Finanzas/Obra reusan el diálogo "no conectado" ya construido para el mapa de fuentes —
-// mismas reglas de honestidad visual: sin salida propia, solo el estado gris.
+// RH reusa el diálogo "no conectado" ya construido para el mapa de fuentes — mismas
+// reglas de honestidad visual: sin salida propia, solo el estado gris. Finanzas/Obra
+// pasaron a "vista de concepto" (ver FlaskConical en ModuleBar): tienen vista propia,
+// pero con datos ilustrativos, no reales — ver lib/mock-data-finanzas-obra.ts.
 const modulosNoConectados: { key: string; label: string; hoy: string; con: string }[] = [
   {
     key: 'rh',
@@ -43,19 +50,17 @@ const modulosNoConectados: { key: string; label: string; hoy: string; con: strin
     hoy: `Hoy sabes: ${carga.reduce((s, c) => s + c.asignaciones, 0)} tareas repartidas entre ${carga.length} personas, por el Excel de Gantt.`,
     con: 'Con el módulo de RH verías la capacidad real del equipo, quién está disponible para tomar más trabajo, y dónde hace falta contratar.',
   },
-  {
-    key: 'finanzas',
-    label: 'Finanzas',
-    hoy: `Hoy sabes: ofertaste ${oferta.monto} en ${oferta.proyecto}.`,
-    con: 'Con el módulo de Finanzas verías el estado de cuenta de cada proyecto, no solo de licitaciones: flujo de caja, cuentas por cobrar y el margen real detrás de cada oferta.',
-  },
-  {
-    key: 'obra',
-    label: 'Obra',
-    hoy: `Hoy sabes: ${licitaciones.filter((l) => l.estado === 'Construcción').length} expedientes están en etapa de construcción, según ComprasMX.`,
-    con: 'Con el módulo de Obra verías el avance físico real en sitio: bitácora, incidencias y fotografías, cruzado contra el Gantt administrativo de cada expediente.',
-  },
 ];
+
+// Un solo estado por módulo (en vez de dos arrays que había que mantener en sync):
+// evita combinaciones imposibles como "ilustrativo pero no conectado".
+type ModuloEstado = 'conectado' | 'ilustrativo' | 'no_conectado';
+const MODULO_ESTADO: Record<ModuloKey, ModuloEstado> = {
+  licitaciones: 'conectado',
+  rh: 'no_conectado',
+  finanzas: 'ilustrativo',
+  obra: 'ilustrativo',
+};
 
 const entityBars = porEntidad.slice(0, 5);
 const fallosFechadosPorId = new Map(hitos.map(({ id, fecha }) => [id, fecha]));
@@ -123,6 +128,61 @@ const chatAnswers: Record<ChatKey, { question: string; answer: string; source: s
     answer: `La fuente no especifica la moneda del monto de ${oferta.proyecto} (${oferta.monto}) — el Excel de Ofertas trae la cifra sin esa columna. No lo inventamos: conviene confirmarlo directamente en la fuente comercial antes de reportarlo.`,
     source: 'Excel de Ofertas · Registro comercial',
   },
+  fianzaVence: {
+    question: '¿Alguna fianza está por vencer?',
+    answer: bondsPorVencer.length
+      ? (() => {
+          const bond = bondsPorVencer[0];
+          const proyecto = proyectoPorId(bond.proyectoId);
+          const match = matchResultPorProyecto(bond.proyectoId);
+          const licitacion = match?.licitacionId ? licitacionPorIdSafe(match.licitacionId) : undefined;
+          const dias = diasEntreFallo(bond, licitacion?.fallo);
+          return `Sí — la más próxima es la de ${proyecto.name} (${proyecto.client}): vence el ${bond.expiryDate}${dias !== null ? `, ${dias} días después del fallo registrado en GAIP (${licitacion?.fallo})` : ''}. Es el margen más corto del portafolio ilustrativo.`;
+        })()
+      : 'En este ejemplo ilustrativo ninguna fianza está por vencer.',
+    source: 'Vista de concepto · Finanzas (datos ilustrativos, no reales)',
+  },
+  cobranza: {
+    question: '¿Cómo va la cobranza del portafolio?',
+    answer: (() => {
+      const c = cobranzaConsolidada();
+      return `Del monto total contratado (${fmtMXN(c.montoTotal)}), se ha facturado ${fmtMXN(c.facturado)} y cobrado ${fmtMXN(c.pagado)}. Queda ${fmtMXN(c.pendientePorCobrar)} pendiente por cobrar y ${fmtMXN(c.porEjercer)} por ejercer.`;
+    })(),
+    source: 'Vista de concepto · Finanzas (datos ilustrativos, no reales)',
+  },
+  avanceObra: {
+    question: '¿El avance de obra coincide con lo facturado?',
+    answer: (() => {
+      const peor = proyectos
+        .map((p) => ({ proyecto: p, ...semaforoDesfase(p.id) }))
+        .sort((a, b) => b.desfase - a.desfase)[0];
+      if (!peor || peor.nivel === 'alineado') return `En este ejemplo ilustrativo, el avance físico y lo facturado están alineados en la mayoría del portafolio (diferencia menor a 10 puntos).`;
+      return `El caso con mayor desfase es ${peor.proyecto.name} (${peor.proyecto.client}): hay ${peor.desfase} puntos de diferencia entre su avance físico (${peor.proyecto.progress}%) y lo facturado del contrato. Conviene revisarlo antes de la próxima estimación.`;
+    })(),
+    source: 'Vista de concepto · Obra (datos ilustrativos, no reales)',
+  },
+  cruceAutomatico: {
+    question: '¿Cuántos proyectos se lograron cruzar automáticamente?',
+    answer: (() => {
+      const vinculados = matchResults.filter((r) => r.autoLinked).length;
+      return `El motor de cruce vinculó automáticamente ${vinculados} de ${proyectos.length} proyectos con su licitación de origen, con un umbral mínimo de confianza del ${Math.round(0.85 * 100)}%. Ningún ID compartido conecta las dos fuentes — la señal más fuerte fue el número de procedimiento coincidiendo exacto entre ambas.`;
+    })(),
+    source: 'Motor de cruce · lib/matching-engine.ts (recalculado en cada carga)',
+  },
+  cruceSinVincular: {
+    question: '¿Qué expedientes quedaron sin vincular y por qué?',
+    answer: (() => {
+      const sinVincular = matchResults.filter((r) => !r.autoLinked);
+      if (sinVincular.length === 0) return 'Todos los proyectos del ejemplo se lograron vincular automáticamente con score arriba del umbral.';
+      const detalle = sinVincular.map((r) => {
+        const proyecto = proyectos.find((p) => p.id === r.proyectoId);
+        const mejorScore = r.bestRejectedCandidate ? `${Math.round(r.bestRejectedCandidate.score * 100)}%` : 'ninguno';
+        return `“${proyecto?.name}” (mejor candidato encontrado: ${mejorScore} de confianza)`;
+      }).join('; ');
+      return `${sinVincular.length} proyecto(s) quedaron sin vincular porque ningún candidato superó el umbral del 85%: ${detalle}. El motor prefiere no adivinar antes que forzar un cruce de baja confianza.`;
+    })(),
+    source: 'Motor de cruce · lib/matching-engine.ts (recalculado en cada carga)',
+  },
 };
 
 // --- Pieza 3: Capacidad vs. Demanda — el cruce Gantt x fechas de fallo que ComprasMX no puede hacer. ---
@@ -170,7 +230,7 @@ export default function Home() {
   const openDetail = (item: Licitacion) => { setSelected(item); setView('detalle'); };
   const navigate = (next: View) => { setView(next); if (next !== 'detalle') setSelected(null); if (next !== 'licitaciones') setOnlyHitos(false); };
   const openHitos = () => { setOnlyHitos(true); setQuery(''); setStateFilter('Todos'); setEntityFilter('Todas'); setTenderPage(0); setView('licitaciones'); };
-  const moduloActivo: ModuloKey = 'licitaciones';
+  const moduloActivo: ModuloKey = view === 'finanzas' ? 'finanzas' : view === 'obra' ? 'obra' : 'licitaciones';
   const modulosGris = modulosNoConectados.find((m) => m.key === moduloAbierto);
   const hitosIds = useMemo(() => new Set(hitos.map((h) => h.id)), []);
 
@@ -245,9 +305,18 @@ export default function Home() {
             <Button variant="ghost" aria-label={`Ofertas, ${oferta ? 1 : 0} en seguimiento`} aria-current={view === 'ofertas' ? 'page' : undefined} className={`nav-item ${view === 'ofertas' ? 'active' : ''}`} onClick={() => navigate('ofertas')}>
               <BriefcaseBusiness className="nav-icon" /><span className="nav-copy">Ofertas</span><span className="nav-count">{oferta ? 1 : 0}</span>
             </Button>
+            <Button variant="ghost" aria-label="Finanzas, vista de concepto" aria-current={view === 'finanzas' ? 'page' : undefined} className={`nav-item ${view === 'finanzas' ? 'active' : ''}`} onClick={() => navigate('finanzas')}>
+              <Wallet className="nav-icon" /><span className="nav-copy">Finanzas</span><FlaskConical className="nav-icon-concept" aria-hidden="true" />
+            </Button>
+            <Button variant="ghost" aria-label="Obra, vista de concepto" aria-current={view === 'obra' ? 'page' : undefined} className={`nav-item ${view === 'obra' ? 'active' : ''}`} onClick={() => navigate('obra')}>
+              <HardHat className="nav-icon" /><span className="nav-copy">Obra</span><FlaskConical className="nav-icon-concept" aria-hidden="true" />
+            </Button>
+            <Button variant="ghost" aria-label="Cruce de datos, motor en vivo" aria-current={view === 'matching' ? 'page' : undefined} className={`nav-item ${view === 'matching' ? 'active' : ''}`} onClick={() => navigate('matching')}>
+              <GitMerge className="nav-icon" /><span className="nav-copy">Cruce</span><FlaskConical className="nav-icon-concept" aria-hidden="true" />
+            </Button>
           </div>
         </nav>
-        <ModuleBar activo={moduloActivo} onLicitaciones={() => navigate('panorama')} onGris={(key) => setModuloAbierto(key)} />
+        <ModuleBar activo={moduloActivo} onModuleClick={(key) => { if (key === 'finanzas' || key === 'obra') navigate(key); else if (key === 'licitaciones') navigate('panorama'); else setModuloAbierto(key); }} />
         <div className="sidebar-footer">
           <div className="profile-card">
             <span className="avatar">US</span>
@@ -259,7 +328,7 @@ export default function Home() {
       <section className="workspace" id="main-content" tabIndex={-1}>
         <header className="topbar">
           <div>
-            <h1>{view === 'panorama' ? 'Panorama operativo' : view === 'licitaciones' ? 'Licitaciones unificadas' : view === 'ofertas' ? 'Ofertas' : 'Detalle del expediente'}</h1>
+            <h1>{view === 'panorama' ? 'Panorama operativo' : view === 'licitaciones' ? 'Licitaciones unificadas' : view === 'ofertas' ? 'Ofertas' : view === 'finanzas' ? 'Finanzas' : view === 'obra' ? 'Obra' : view === 'matching' ? 'Cruce de datos' : 'Detalle del expediente'}</h1>
           </div>
           <div className="top-actions">
             <button className="command-search" onClick={() => setChatOpen(true)} aria-label="Abrir consultas operativas">
@@ -289,6 +358,9 @@ export default function Home() {
                 clearOnlyHitos={() => { setOnlyHitos(false); setTenderPage(0); }}
               />}
           {view === 'ofertas' && <OfertasView />}
+          {view === 'finanzas' && <FinanzasView />}
+          {view === 'obra' && <ObraView />}
+          {view === 'matching' && <MatchingEngineView />}
           {view === 'detalle' && selected && <DetailView item={selected} onBack={() => navigate('licitaciones')} />}
         </div>
       </section>
@@ -301,25 +373,28 @@ export default function Home() {
 
 type Licitation = Licitacion;
 
-// --- Pieza 5: barra de módulos de empresa. Encuadra Licitaciones como UN módulo, no el producto. ---
-function ModuleBar({ activo, onLicitaciones, onGris }: { activo: ModuloKey; onLicitaciones: () => void; onGris: (key: string) => void }) {
+// --- Pieza 5: barra de módulos de empresa. Encuadra Licitaciones como UN módulo, no el producto.
+// Finanzas/Obra son un tercer estado visual: "vista de concepto" (FlaskConical), ni el real
+// verificado de Licitaciones ni el gris bloqueado de RH — ver docs/ejemplo-ilustrativo-cruce.md. ---
+function ModuleBar({ activo, onModuleClick }: { activo: ModuloKey; onModuleClick: (key: ModuloKey) => void }) {
   const modulos: ModuloKey[] = ['licitaciones', 'rh', 'finanzas', 'obra'];
   return <nav className="module-bar" aria-label="Módulos de la empresa">
     <span className="module-bar-label">GAIP ·</span>
     <div className="module-bar-list">
       {modulos.map((key) => {
         const info = moduloInfo[key];
-        const conectado = key === 'licitaciones';
+        const estado = MODULO_ESTADO[key];
+        const conectado = estado !== 'no_conectado';
+        const ilustrativo = estado === 'ilustrativo';
         const isActive = key === activo;
-        const onClick = key === 'licitaciones' ? onLicitaciones : () => onGris(key);
         return <button
           key={key}
           className={`module-pill ${conectado ? 'on' : 'off'} ${isActive ? 'active' : ''}`}
           aria-current={isActive ? 'page' : undefined}
           aria-haspopup={conectado ? undefined : 'dialog'}
-          title={conectado ? undefined : 'Vista de demostración: módulo no conectado'}
-          onClick={onClick}
-        ><info.icon />{info.label}{!conectado && <Lock className="module-pill-lock" />}</button>;
+          title={ilustrativo ? 'Vista de concepto: datos ilustrativos, no reales' : conectado ? undefined : 'Vista de demostración: módulo no conectado'}
+          onClick={() => onModuleClick(key)}
+        ><info.icon />{info.label}{!conectado && <Lock className="module-pill-lock" />}{ilustrativo && <FlaskConical className="module-pill-concept" aria-hidden="true" />}</button>;
       })}
     </div>
   </nav>;
@@ -787,10 +862,20 @@ const questionMeta: Record<ChatKey, { label: string; hint: string }> = {
   ofertaVsLicitacion: { label: 'Licitación vs. Oferta', hint: 'En qué se diferencian' },
   pipeline: { label: 'Resumen del pipeline', hint: 'Todo el corte de un vistazo' },
   moneda: { label: 'Un dato que falta', hint: 'Cuando la fuente no lo trae' },
+  fianzaVence: { label: 'Fianzas', hint: 'Vista de concepto · ilustrativo' },
+  cobranza: { label: 'Cobranza', hint: 'Vista de concepto · ilustrativo' },
+  avanceObra: { label: 'Avance de obra', hint: 'Vista de concepto · ilustrativo' },
+  cruceAutomatico: { label: 'Cruce automático', hint: 'Vista de concepto · motor de matching' },
+  cruceSinVincular: { label: 'Sin vincular', hint: 'Vista de concepto · motor de matching' },
 };
 
 function matchChatQuestion(value: string): ChatKey | null {
   const normalized = value.toLocaleLowerCase('es-MX');
+  if (/crucé|cruzaron|vincul|automátic|automatic/.test(normalized)) return 'cruceAutomatico';
+  if (/sin vincular|no se cruzaron|quedaron sin/.test(normalized)) return 'cruceSinVincular';
+  if (/fianza|garant[ií]a|p[oó]liza|aseguradora/.test(normalized)) return 'fianzaVence';
+  if (/cobranza|cobrar|cartera|facturad|pagad/.test(normalized)) return 'cobranza';
+  if (/avance de obra|bit[aá]cora|avance f[ií]sico/.test(normalized)) return 'avanceObra';
   if (/moneda|divisa/.test(normalized)) return 'moneda';
   if (/diferencia|vs\.?|versus|distinci[oó]n/.test(normalized)) return 'ofertaVsLicitacion';
   if (/resumen|pipeline|panorama general/.test(normalized)) return 'pipeline';

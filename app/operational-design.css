@@ -930,3 +930,22 @@ button:focus-visible,a:focus-visible,input:focus-visible,[role="button"]:focus-v
 .intelligence-sheet>[data-slot="sheet-close"]:hover{border-color:#d1dae3!important;background:#f1f4f7!important}
 .clear-chat{justify-self:end;margin-right:2px}
 @media(max-width:620px){.intelligence-head{padding-right:64px!important}.clear-chat{display:none!important}}
+
+/* --- Finanzas/Obra: vistas de concepto (datos ilustrativos, no reales) --- */
+.module-pill-concept{width:12px!important;height:12px!important;margin-left:2px;opacity:.9;color:#e7b34a}
+.nav-icon-concept{width:12px!important;height:12px!important;margin-left:-2px;opacity:.85;color:#c98a1f}
+.concept-banner{display:flex;align-items:flex-start;gap:10px;margin-bottom:18px}
+.concept-banner svg{color:#c98a1f}
+.concept-view{display:flex;flex-direction:column;gap:20px}
+.finanzas-table th,.finanzas-table td{white-space:nowrap}
+.finanzas-table td:nth-child(2),.finanzas-table th:nth-child(2){white-space:normal}
+.bond-status-vigente{background:#e6f4ea;color:#1e7a41;border-color:#bfe3cb}
+.bond-status-por_vencer{background:#fdf1dd;color:#93611a;border-color:#f0d6a6}
+.bond-status-vencida{background:#fbe5e2;color:#a13327;border-color:#f0bdb5}
+.bond-status-liberada{background:#eef0f2;color:#53636e;border-color:#d7dce0}
+.desfase-alineado{color:#1e7a41}
+.desfase-amarillo{color:#93611a}
+.desfase-rojo{color:#a13327}
+.match-status-auto{background:#e6f4ea;color:#1e7a41;border-color:#bfe3cb}
+.match-status-none{background:#eef0f2;color:#53636e;border-color:#d7dce0}
+.match-status-ambiguous{background:#fdf1dd;color:#93611a;border-color:#f0d6a6}

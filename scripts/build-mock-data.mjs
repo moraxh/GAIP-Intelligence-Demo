@@ -7,6 +7,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { titleCase, normalizeProcedureName } from '../lib/text-normalization.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
@@ -96,36 +97,8 @@ function fmtFecha(iso) {
   return undefined;
 }
 
-function titleCase(str) {
-  if (!str) return str;
-  // Respeta separadores "/" y "-" como límites de palabra (p. ej. "JAVIER/BRENDA" -> "Javier/Brenda")
-  return str
-    .toLowerCase()
-    .split(/(\s|\/|-)/)
-    .map((w) => (/[a-záéíóúñ]/i.test(w) ? w[0].toUpperCase() + w.slice(1) : w))
-    .join('');
-}
-
-function normalizeProcedureName(sourceName) {
-  if (!sourceName) return sourceName;
-  let name = sourceName.replace(/\s+/g, ' ').trim();
-  const hasOpeningQuote = /^[“"]/.test(name);
-  const hasMatchingClosingQuote = (name.startsWith('“') && name.endsWith('”')) || (name.startsWith('"') && name.endsWith('"'));
-  const sourceFragment = hasOpeningQuote && !hasMatchingClosingQuote;
-  if (hasMatchingClosingQuote) name = name.slice(1, -1).trim();
-  else if (sourceFragment) name = name.slice(1).trimStart();
-
-  // Preserve Roman numerals and dotted initialisms through title casing. These
-  // are presentation-only; the literal source remains available in nombreFuente.
-  const preservedTokens = [];
-  const preserve = (token) => `\uE000${preservedTokens.push(token) - 1}\uE001`;
-  name = name.replace(/\bTRAMO\s*(IV|III|II|V|I)\b/gi, (_match, numeral) => `TRAMO ${preserve(numeral.toUpperCase())}`);
-  name = name.replace(/\b(?:[A-Z]\.){2,}/g, (match) => {
-    return preserve(match);
-  });
-  const displayName = titleCase(name).replace(/\uE000(\d+)\uE001/g, (_match, index) => preservedTokens[Number(index)]);
-  return `${displayName}${sourceFragment ? '…' : ''}`;
-}
+// titleCase y normalizeProcedureName viven en lib/text-normalization.ts (compartidas con
+// lib/matching-engine.ts — ver import al inicio de este archivo).
 
 const licitaciones = [...registrosPorId.entries()].map(([id, { item, lista }]) => {
   const ganttInfo = normalizeTareas(id);
