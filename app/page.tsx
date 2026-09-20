@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import {
   AlertTriangle, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronLeft,
   ChevronRight, Database, FileStack, Filter, FlaskConical, Gauge, GitMerge, Lock,
@@ -22,10 +23,23 @@ import {
 import { FinanzasView } from '@/components/dashboard/finanzas-view';
 import { ObraView } from '@/components/dashboard/obra-view';
 import { MatchingEngineView } from '@/components/dashboard/matching-engine-view';
-import { bondsPorVencer, cobranzaConsolidada, diasEntreFallo, proyectoPorId, proyectos, semaforoDesfase, matchResultPorProyecto, matchResults } from '@/lib/mock-data-finanzas-obra';
+import {
+  bondsPorVencer, cobranzaConsolidada, diasEntreFallo, proyectoPorId, proyectos, semaforoDesfase,
+  matchResultPorProyecto, matchResultPorLicitacion, matchResults, riesgoPortafolio, type RiesgoNivel,
+} from '@/lib/mock-data-finanzas-obra';
 import { fmtMXN, licitacionPorId as licitacionPorIdSafe } from '@/lib/mock-data-helpers';
 
 type View = 'panorama' | 'licitaciones' | 'ofertas' | 'detalle' | 'finanzas' | 'obra' | 'matching';
+type RoutedView = Exclude<View, 'detalle'>;
+
+const viewRoutes: Record<RoutedView, string> = {
+  panorama: '/',
+  licitaciones: '/licitaciones',
+  ofertas: '/ofertas',
+  finanzas: '/finanzas',
+  obra: '/obra',
+  matching: '/cruce',
+};
 type ChatKey = 'vence' | 'avance' | 'oferta' | 'cruce' | 'sinArrancar' | 'ofertaVsLicitacion' | 'pipeline' | 'moneda' | 'fianzaVence' | 'cobranza' | 'avanceObra' | 'cruceAutomatico' | 'cruceSinVincular';
 type ModelContext = { registerTool: (tool: Record<string, unknown>, options?: { signal?: AbortSignal }) => void | Promise<void> };
 
@@ -215,8 +229,9 @@ function StateBadge({ state }: { state: Estado }) {
   return <span className={`state-badge state-${state.toLowerCase().replace(' ', '-')}`}>{state}</span>;
 }
 
-export default function Home() {
-  const [view, setView] = useState<View>('panorama');
+export default function Home({ initialView = 'panorama' }: { initialView?: RoutedView }) {
+  const router = useRouter();
+  const [view, setView] = useState<View>(initialView);
   const [selected, setSelected] = useState<Licitation | null>(null);
   const [query, setQuery] = useState('');
   const [stateFilter, setStateFilter] = useState<'Todos' | Estado>('Todos');
@@ -228,8 +243,15 @@ export default function Home() {
   const [moduloAbierto, setModuloAbierto] = useState<string | null>(null);
 
   const openDetail = (item: Licitacion) => { setSelected(item); setView('detalle'); };
-  const navigate = (next: View) => { setView(next); if (next !== 'detalle') setSelected(null); if (next !== 'licitaciones') setOnlyHitos(false); };
-  const openHitos = () => { setOnlyHitos(true); setQuery(''); setStateFilter('Todos'); setEntityFilter('Todas'); setTenderPage(0); setView('licitaciones'); };
+  const navigate = useCallback((next: View) => {
+    setView(next);
+    if (next !== 'detalle') {
+      setSelected(null);
+      router.push(viewRoutes[next]);
+    }
+    if (next !== 'licitaciones') setOnlyHitos(false);
+  }, [router]);
+  const openHitos = () => { setOnlyHitos(true); setQuery(''); setStateFilter('Todos'); setEntityFilter('Todas'); setTenderPage(0); navigate('licitaciones'); };
   const moduloActivo: ModuloKey = view === 'finanzas' ? 'finanzas' : view === 'obra' ? 'obra' : 'licitaciones';
   const modulosGris = modulosNoConectados.find((m) => m.key === moduloAbierto);
   const hitosIds = useMemo(() => new Set(hitos.map((h) => h.id)), []);
@@ -271,7 +293,7 @@ export default function Home() {
     };
     void register().catch(() => undefined);
     return () => lifecycle.abort();
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     const openCommandSearch = (event: KeyboardEvent) => {
@@ -342,7 +364,7 @@ export default function Home() {
         </header>
 
         <div className="content">
-          {view === 'panorama' && <Dashboard onAll={() => navigate('licitaciones')} onHitos={openHitos} onDetail={openDetail} />}
+          {view === 'panorama' && <Dashboard onAll={() => navigate('licitaciones')} onHitos={openHitos} onDetail={openDetail} onNavigateView={navigate} />}
           {view === 'licitaciones' && <LicitacionesView
                 query={query}
                 setQuery={(value) => { setQuery(value); setTenderPage(0); }}
@@ -361,7 +383,7 @@ export default function Home() {
           {view === 'finanzas' && <FinanzasView />}
           {view === 'obra' && <ObraView />}
           {view === 'matching' && <MatchingEngineView />}
-          {view === 'detalle' && selected && <DetailView item={selected} onBack={() => navigate('licitaciones')} />}
+          {view === 'detalle' && selected && <DetailView item={selected} onBack={() => navigate('licitaciones')} onGoToMatch={() => navigate('matching')} />}
         </div>
       </section>
 
@@ -415,7 +437,7 @@ function GraySourceDialog({ label, hoy, con, onClose }: { label: string; hoy: st
   </Dialog>;
 }
 
-function Dashboard({ onAll, onHitos, onDetail }: { onAll: () => void; onHitos: () => void; onDetail: (item: Licitacion) => void }) {
+function Dashboard({ onAll, onHitos, onDetail, onNavigateView }: { onAll: () => void; onHitos: () => void; onDetail: (item: Licitacion) => void; onNavigateView: (view: View) => void }) {
   const expedientesConTareas = licitaciones.filter((item) => item.tareas?.length).length;
   const metrics = [
     { label:'Invitaciones sin procesar', value: fuentes.totalInvitacionesSinProcesar.toLocaleString('es-MX'), detail:'Esperando filtro de GAIP, aún no entran al pipeline', icon:FileStack },
@@ -425,6 +447,9 @@ function Dashboard({ onAll, onHitos, onDetail }: { onAll: () => void; onHitos: (
   ];
   return <div className="executive-dashboard">
     <div className="page-heading"><div><h2>Resumen ejecutivo</h2><p>Corte operativo al {fuentes.corte}.</p></div><Button variant="outline" onClick={onAll}>Abrir directorio <ChevronRight /></Button></div>
+
+    <FuentesConectadasResumen onNavigateView={onNavigateView} />
+    <RiesgoPortafolioResumen onNavigateView={onNavigateView} />
 
     <section className="consolidation-story" aria-label="Estado del corte operativo">
       <div className="story-intro"><span>ESTADO DEL CORTE</span><strong><b>{fuentes.totalProcesosUnicos}</b> procesos únicos</strong><small>Consolidados desde {fuentes.totalListasOrigen} listas de origen</small></div>
@@ -454,6 +479,66 @@ function Dashboard({ onAll, onHitos, onDetail }: { onAll: () => void; onHitos: (
 
     <CapacidadVsDemanda onDetail={onDetail} />
   </div>;
+}
+
+// Abre el resumen ejecutivo dejando claro, en un vistazo, que este no es un dashboard de
+// una sola fuente: cuenta lo que trae cada una de las 4 y qué tan viva está (2 reales, 1
+// de concepto sobre el motor de cruce). Es el mismo argumento del mapa de fuentes original
+// del Plan v2, pero como encabezado permanente en vez de pantalla aparte.
+function FuentesConectadasResumen({ onNavigateView }: { onNavigateView: (view: View) => void }) {
+  const fuentesResumen: { label: string; detalle: string; icon: typeof Database; view: View; badge?: string }[] = [
+    { label: 'ComprasMX', detalle: `${fuentes.totalProcesosUnicos} procesos únicos`, icon: FileStack, view: 'licitaciones' },
+    { label: 'Excel de Gantt', detalle: `${carga.reduce((s, c) => s + c.asignaciones, 0)} tareas · ${carga.length} responsables`, icon: Users, view: 'licitaciones' },
+    { label: 'Excel de Ofertas', detalle: `${oferta.monto} en seguimiento`, icon: TrendingUp, view: 'ofertas' },
+    { label: 'Tablero de Proyectos', detalle: `${proyectos.length} proyectos adjudicados`, icon: Building2, view: 'matching', badge: 'concepto' },
+  ];
+  return <section className="fuentes-resumen" aria-label="Fuentes conectadas al corte">
+    <span className="fuentes-resumen-label"><GitMerge />{fuentesResumen.length} fuentes cruzándose en este corte</span>
+    <div className="fuentes-resumen-list">
+      {fuentesResumen.map((f) => <button key={f.label} className="fuentes-resumen-item" onClick={() => onNavigateView(f.view)}>
+        <f.icon />
+        <div><strong>{f.label}{f.badge && <span className="concept-badge-inline">{f.badge}</span>}</strong><span>{f.detalle}</span></div>
+      </button>)}
+    </div>
+  </section>;
+}
+
+const riesgoNivelLabel: Record<RiesgoNivel, string> = { alto: 'Riesgo alto', medio: 'Riesgo medio', bajo: 'Riesgo bajo' };
+
+// El insight insignia del cruce (docs/ejemplo-ilustrativo-cruce.md §3.6), promovido del
+// módulo Cruce al resumen ejecutivo: la pregunta "¿qué proyecto necesita atención esta
+// semana?" combinando desfase avance/facturación + margen de fianza + carga de equipo.
+function RiesgoPortafolioResumen({ onNavigateView }: { onNavigateView: (view: View) => void }) {
+  const ranking = riesgoPortafolio();
+  const top = ranking.slice(0, 3);
+  return <section className="riesgo-portafolio" aria-label="Riesgo de portafolio, cruzando licitaciones y proyectos adjudicados">
+    <Card className="executive-card">
+      <CardHeader>
+        <div><CardTitle>¿Qué proyecto adjudicado necesita atención esta semana?</CardTitle><p>Cruce: avance vs. facturación (Finanzas) + fianzas vs. fallo (ComprasMX) + carga de equipo (Excel de Gantt)</p></div>
+        <span className="concept-badge"><FlaskConical />Datos ilustrativos</span>
+      </CardHeader>
+      <CardContent>
+        <div className="riesgo-portafolio-list">
+          {top.map(({ proyecto, nivel, razones }) => {
+            const match = matchResultPorProyecto(proyecto.id);
+            const licitacion = match?.licitacionId ? licitacionPorId(match.licitacionId) : undefined;
+            return <button key={proyecto.id} className="riesgo-portafolio-row" onClick={() => onNavigateView('matching')}>
+              <span className={`riesgo-pill riesgo-${nivel}`}>{riesgoNivelLabel[nivel]}</span>
+              <div className="riesgo-portafolio-copy">
+                <strong>{proyecto.name}</strong>
+                <span>{razones.length > 0 ? razones.join(' · ') : 'Sin señales de riesgo en este corte.'}</span>
+                {licitacion && <small>Origen: {licitacion.numero} — {licitacion.dependencia}</small>}
+              </div>
+              <ChevronRight className="riesgo-portafolio-arrow" />
+            </button>;
+          })}
+        </div>
+        <button className="riesgo-portafolio-footer" onClick={() => onNavigateView('matching')}>
+          Ver el cruce completo de {proyectos.length} proyectos <ArrowRight />
+        </button>
+      </CardContent>
+    </Card>
+  </section>;
 }
 
 // Lectura editorial prototipo: el contenido está hardcodeado a partir del corte real.
@@ -778,12 +863,14 @@ function expedienteInsights(tareas: Tarea[]) {
   return insights.slice(0, 4);
 }
 
-function DetailView({ item, onBack }: { item:Licitacion; onBack:()=>void }) {
+function DetailView({ item, onBack, onGoToMatch }: { item:Licitacion; onBack:()=>void; onGoToMatch:()=>void }) {
   const tareas = item.tareas ?? [];
   const average = tareas.length ? Math.round(tareas.reduce((sum,task) => sum + task.avance,0) / tareas.length) : 0;
   const completed = tareas.filter((task) => task.avance === 100).length;
   const owners = Array.from(new Set(tareas.map((task) => task.responsable)));
   const insights = expedienteInsights(tareas);
+  const proyectoVinculado = matchResultPorLicitacion(item.id);
+  const proyecto = proyectoVinculado ? proyectoPorId(proyectoVinculado.proyectoId) : undefined;
   const milestoneDates = [
     { label:'Aclaraciones', value:item.aclaraciones },
     { label:'Presentación', value:item.apertura },
@@ -803,6 +890,15 @@ function DetailView({ item, onBack }: { item:Licitacion; onBack:()=>void }) {
         <div><span>Avance del expediente</span><strong>{tareas.length ? `${completed} de ${tareas.length} tareas listas` : 'Sin tareas registradas'}</strong></div>
       </div>
     </article>
+
+    {proyecto && <button type="button" className="detail-bridge" onClick={onGoToMatch}>
+      <GitMerge />
+      <div>
+        <strong>Este expediente ya tiene proyecto activo: {proyecto.name}</strong>
+        <span>Ver cobranza, avance de obra y fianzas cruzadas — vista de concepto en Cruce de datos</span>
+      </div>
+      <ArrowRight className="detail-bridge-arrow" />
+    </button>}
 
     <div className="milestone-strip" aria-label="Fechas clave del proceso">
       {milestoneDates.map((date, index) => <div className="milestone" key={date.label} title={date.label === 'Fallo' ? 'Fallo: fecha en que la dependencia resuelve y da a conocer al ganador' : undefined}>

@@ -18,7 +18,7 @@
 // de algo que GAIP todavía no reporta como ganado. Todas las fechas de contrato,
 // facturas y pagos caen entre el inicio de contrato y el corte, nunca después.
 
-import { licitaciones } from '@/lib/mock-data';
+import { licitaciones, carga } from '@/lib/mock-data';
 import { matchProyectos, MATCH_THRESHOLD, type MatchResult, type MatchSignal } from '@/lib/matching-engine';
 
 export { MATCH_THRESHOLD, type MatchResult, type MatchSignal };
@@ -181,6 +181,14 @@ export function matchResultPorProyecto(proyectoId: string): MatchResult | undefi
   return matchResults.find((r) => r.proyectoId === proyectoId);
 }
 
+// Puente inverso: desde un expediente de licitación (real), encontrar si el motor lo
+// vinculó a un proyecto adjudicado (ilustrativo). Usado por DetailView en app/page.tsx
+// para mostrar el puente "este expediente ya tiene proyecto activo" sin que el cliente
+// tenga que descubrir Finanzas/Obra/Cruce navegando el sidebar por su cuenta.
+export function matchResultPorLicitacion(licitacionId: string): MatchResult | undefined {
+  return matchResults.find((r) => r.autoLinked && r.licitacionId === licitacionId);
+}
+
 export function montoTotal(proyectoId: string): number {
   const contrato = proyectoPorId(proyectoId).contractAmount;
   const addendasMonto = addendas.filter((a) => a.proyectoId === proyectoId).reduce((sum, a) => sum + a.amount, 0);
@@ -263,6 +271,50 @@ export function diasEntreFallo(bond: BondIlustrativo, fallo: string | undefined)
 }
 
 export const bondsPorVencer = bonds.filter((b) => b.status === 'por_vencer' || b.status === 'vencida').sort((a, b) => diasParaVencer(a) - diasParaVencer(b));
+
+// --- Ranking de riesgo de portafolio (docs/ejemplo-ilustrativo-cruce.md §3.6) ---
+// Combina las tres señales individuales ya expuestas por separado en Finanzas/Obra/Cruce
+// en un solo score por proyecto: es la pregunta "¿cuál proyecto necesita atención esta
+// semana?" respondida con las tres fuentes a la vez, no tres tablas sueltas.
+export type RiesgoNivel = 'alto' | 'medio' | 'bajo';
+export type RiesgoPortafolio = {
+  proyecto: ProyectoIlustrativo;
+  nivel: RiesgoNivel;
+  puntos: number;
+  razones: string[];
+};
+
+function cargaPorCoordinador(nombre: string): { asignaciones: number; avance: number } | undefined {
+  const normalizado = nombre.trim().toLocaleLowerCase('es-MX');
+  return carga.find((c) => c.nombre.trim().toLocaleLowerCase('es-MX') === normalizado);
+}
+
+export function riesgoPortafolio(): RiesgoPortafolio[] {
+  return proyectos.map((proyecto) => {
+    const { desfase, nivel: nivelDesfase } = semaforoDesfase(proyecto.id);
+    const bond = bonds.find((b) => b.proyectoId === proyecto.id);
+    const match = matchResultPorProyecto(proyecto.id);
+    const licitacion = match?.licitacionId ? licitaciones.find((l) => l.id === match.licitacionId) : undefined;
+    const diasFianza = bond ? diasEntreFallo(bond, licitacion?.fallo) : null;
+    const equipo = proyecto.coordinator !== 'Sin asignar' ? cargaPorCoordinador(proyecto.coordinator) : undefined;
+    const proyectosDelMismoCoordinador = proyectos.filter((p) => p.coordinator === proyecto.coordinator).length;
+
+    let puntos = 0;
+    const razones: string[] = [];
+
+    if (nivelDesfase === 'rojo') { puntos += 3; razones.push(`${desfase} pts de desfase entre avance físico y facturación`); }
+    else if (nivelDesfase === 'amarillo') { puntos += 1.5; razones.push(`${desfase} pts de desfase entre avance físico y facturación`); }
+
+    if (diasFianza !== null && diasFianza <= 14) { puntos += 3; razones.push(`fianza vence ${diasFianza} días después del fallo`); }
+    else if (bond?.status === 'por_vencer') { puntos += 1.5; razones.push('fianza por vencer'); }
+
+    if (proyectosDelMismoCoordinador > 1) { puntos += 1.5; razones.push(`${proyecto.coordinator} coordina ${proyectosDelMismoCoordinador} proyectos activos`); }
+    else if (equipo && equipo.asignaciones >= 14) { puntos += 1; razones.push(`${proyecto.coordinator} ya tiene ${equipo.asignaciones} tareas de licitación asignadas`); }
+
+    const nivel: RiesgoNivel = puntos >= 4 ? 'alto' : puntos >= 1.5 ? 'medio' : 'bajo';
+    return { proyecto, nivel, puntos, razones };
+  }).sort((a, b) => b.puntos - a.puntos);
+}
 
 // Guarda contra que el motor de cruce (lib/matching-engine.ts) deje de encontrar alguna
 // de las 6 vinculaciones esperadas — p.ej. si lib/mock-data.ts se regenera y cambia el

@@ -3,7 +3,6 @@
 import { useMemo } from 'react';
 import { FlaskConical, HardHat } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import {
   proyectos, semaforoDesfase, weeklyGoals, matchResultPorProyecto, type SemaforoDesfase,
@@ -36,20 +35,22 @@ export function ObraView() {
     [],
   );
 
+  const peorDesfase = [...filas].sort((a, b) => b.desfase - a.desfase)[0];
+
   return <div className="concept-view">
-    <Alert className="concept-banner">
-      <FlaskConical />
+    {peorDesfase && peorDesfase.nivel !== 'alineado' && <div className="concept-headline">
+      <HardHat />
       <div>
-        <AlertTitle>Vista de concepto — datos ilustrativos</AlertTitle>
-        <AlertDescription>
-          El avance físico de obra y los objetivos semanales de esta sección son inventados a mano para
-          mostrar el cruce contra el Gantt administrativo de licitación. No son datos reales del cliente.
-        </AlertDescription>
+        <strong>{peorDesfase.proyecto.name}: {peorDesfase.desfase} pts de diferencia entre avance físico y lo facturado.</strong>
+        <span>El Gantt de licitación no sabe qué pasa en obra; el avance de obra no sabe qué se facturó. Cruzar ambas fuentes es lo que expone el desfase.</span>
       </div>
-    </Alert>
+    </div>}
 
     <Card className="executive-card">
-      <CardHeader><div><CardTitle>Avance físico vs. Gantt administrativo</CardTitle><p>Fuentes: Vista de concepto Obra + Excel de Gantt (avance de propuesta, real)</p></div><HardHat className="capacidad-alert-icon" /></CardHeader>
+      <CardHeader>
+        <div><CardTitle>Avance físico vs. Gantt administrativo</CardTitle><p>Fuentes: Vista de concepto Obra + Excel de Gantt (avance de propuesta, real)</p></div>
+        <span className="concept-badge"><FlaskConical />Datos ilustrativos</span>
+      </CardHeader>
       <CardContent>
         {filas.map(({ proyecto, gantt, desfase, nivel }) => {
           return <div key={proyecto.id} style={{ marginBottom: 22 }}>
@@ -77,7 +78,7 @@ export function ObraView() {
     </Card>
 
     <Card className="executive-card">
-      <CardHeader><CardTitle>Objetivos semanales</CardTitle><p>Vista de concepto · datos ilustrativos</p></CardHeader>
+      <CardHeader><CardTitle>Objetivos semanales</CardTitle></CardHeader>
       <CardContent>
         <div className="deadline-list">
           {weeklyGoals.map((goal) => {

@@ -3,7 +3,6 @@
 import { useMemo } from 'react';
 import { FlaskConical, ShieldAlert } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
@@ -29,20 +28,30 @@ export function FinanzasView() {
     { label: 'Por ejercer', value: fmt(c.porEjercer) },
   ];
 
+  const primeraFianza = bondsPorVencer[0];
+  const proyectoFianza = primeraFianza ? proyectoPorId(primeraFianza.proyectoId) : undefined;
+  const matchFianza = primeraFianza ? matchResultPorProyecto(primeraFianza.proyectoId) : undefined;
+  const licitacionFianza = matchFianza?.licitacionId ? licitacionPorId(matchFianza.licitacionId) : undefined;
+  const diasFianza = primeraFianza ? diasEntreFallo(primeraFianza, licitacionFianza?.fallo) : null;
+
   return <div className="concept-view">
-    <Alert className="concept-banner">
-      <FlaskConical />
+    {primeraFianza && proyectoFianza && <div className="concept-headline">
+      <ShieldAlert />
       <div>
-        <AlertTitle>Vista de concepto — datos ilustrativos</AlertTitle>
-        <AlertDescription>
-          Los montos, facturas, pagos y fianzas de esta sección son inventados a mano para mostrar cómo se
-          vería el cruce entre licitaciones y proyectos adjudicados. No son datos reales del cliente.
-        </AlertDescription>
+        <strong>
+          {diasFianza !== null
+            ? `La fianza de ${proyectoFianza.name} vence ${diasFianza} días después del fallo — y hoy nadie en GAIP puede verlo.`
+            : `La fianza de ${proyectoFianza.name} vence el ${primeraFianza.expiryDate}.`}
+        </strong>
+        <span>ComprasMX no sabe que existe un proyecto adjudicado; el Tablero de Proyectos no sabe cuándo fue el fallo. Solo se ve cruzando ambas fuentes.</span>
       </div>
-    </Alert>
+    </div>}
 
     <Card className="executive-card">
-      <CardHeader><CardTitle>Cobranza consolidada</CardTitle><p>{proyectos.length} proyectos del ejemplo ilustrativo</p></CardHeader>
+      <CardHeader>
+        <div><CardTitle>Cobranza consolidada</CardTitle><p>{proyectos.length} proyectos del ejemplo ilustrativo</p></div>
+        <span className="concept-badge"><FlaskConical />Datos ilustrativos</span>
+      </CardHeader>
       <CardContent>
         <section className="metric-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
           {metrics.map((m) => <Card className="executive-metric" key={m.label}>
@@ -77,7 +86,7 @@ export function FinanzasView() {
     </Card>
 
     <Card className="executive-card">
-      <CardHeader><CardTitle>Facturas y pagos por proyecto</CardTitle><p>Vista de concepto · datos ilustrativos</p></CardHeader>
+      <CardHeader><CardTitle>Facturas y pagos por proyecto</CardTitle></CardHeader>
       <CardContent>
         <Table className="finanzas-table">
           <TableHeader>

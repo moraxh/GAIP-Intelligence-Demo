@@ -3,9 +3,11 @@
 import { useState } from 'react';
 import { FlaskConical, GitMerge, ChevronDown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { proyectos, matchResults, MATCH_THRESHOLD, type MatchResult, type MatchSignal } from '@/lib/mock-data-finanzas-obra';
+import {
+  bondsPorVencer, diasEntreFallo, proyectoPorId, proyectos, matchResults,
+  matchResultPorProyecto, MATCH_THRESHOLD, type MatchResult, type MatchSignal,
+} from '@/lib/mock-data-finanzas-obra';
 import { licitacionPorId } from '@/lib/mock-data-helpers';
 
 const signalLabel: Record<MatchSignal['name'], string> = {
@@ -78,23 +80,26 @@ function MatchRow({ result }: { result: MatchResult }) {
 
 export function MatchingEngineView() {
   const vinculados = matchResults.filter((r) => r.autoLinked).length;
+  const primeraFianza = bondsPorVencer[0];
+  const proyectoFianza = primeraFianza ? proyectoPorId(primeraFianza.proyectoId) : undefined;
+  const matchFianza = primeraFianza ? matchResultPorProyecto(primeraFianza.proyectoId) : undefined;
+  const licitacionFianza = matchFianza?.licitacionId ? licitacionPorId(matchFianza.licitacionId) : undefined;
+  const diasFianza = primeraFianza ? diasEntreFallo(primeraFianza, licitacionFianza?.fallo) : null;
 
   return <div className="concept-view">
-    <Alert className="concept-banner">
-      <FlaskConical />
+    {proyectoFianza && diasFianza !== null && <div className="concept-headline">
+      <GitMerge />
       <div>
-        <AlertTitle>Vista de concepto — motor de cruce en vivo</AlertTitle>
-        <AlertDescription>
-          El cruce que ves abajo lo calcula el motor de matching en tiempo real sobre estos datos
-          (número de procedimiento, nombre, dependencia y fechas) — no está hardcodeado. Ningún ID
-          compartido conecta estas dos fuentes; así se resolvería el cruce con datos reales del
-          cliente si tampoco lo trajeran.
-        </AlertDescription>
+        <strong>Sin este cruce, nadie en GAIP sabría que la fianza de {proyectoFianza.name} vence {diasFianza} días después del fallo.</strong>
+        <span>El motor vinculó {vinculados} de {proyectos.length} proyectos automáticamente, sin un ID compartido entre ComprasMX y el Tablero de Proyectos — solo por similitud de datos.</span>
       </div>
-    </Alert>
+    </div>}
 
     <Card className="executive-card">
-      <CardHeader><div><CardTitle>Cruce automático de datos</CardTitle><p>Umbral de confianza: {Math.round(MATCH_THRESHOLD * 100)}% · {vinculados} de {proyectos.length} proyectos vinculados</p></div><GitMerge className="capacidad-alert-icon" /></CardHeader>
+      <CardHeader>
+        <div><CardTitle>Cruce automático de datos</CardTitle><p>Umbral de confianza: {Math.round(MATCH_THRESHOLD * 100)}% · {vinculados} de {proyectos.length} proyectos vinculados</p></div>
+        <span className="concept-badge"><FlaskConical />Motor en vivo</span>
+      </CardHeader>
       <CardContent>
         {matchResults.map((r) => <MatchRow key={r.proyectoId} result={r} />)}
       </CardContent>

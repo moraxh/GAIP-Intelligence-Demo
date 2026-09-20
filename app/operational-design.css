@@ -934,9 +934,50 @@ button:focus-visible,a:focus-visible,input:focus-visible,[role="button"]:focus-v
 /* --- Finanzas/Obra: vistas de concepto (datos ilustrativos, no reales) --- */
 .module-pill-concept{width:12px!important;height:12px!important;margin-left:2px;opacity:.9;color:#e7b34a}
 .nav-icon-concept{width:12px!important;height:12px!important;margin-left:-2px;opacity:.85;color:#c98a1f}
-.concept-banner{display:flex;align-items:flex-start;gap:10px;margin-bottom:18px}
-.concept-banner svg{color:#c98a1f}
 .concept-view{display:flex;flex-direction:column;gap:20px}
+.concept-badge{display:inline-flex;align-items:center;gap:6px;padding:3px 10px 3px 8px;border-radius:999px;background:#fdf1dd;border:1px solid #f0d6a6;color:#93611a;font-size:.72rem;font-weight:600;white-space:nowrap}
+.concept-badge svg{width:13px!important;height:13px!important}
+.concept-headline{display:flex;align-items:flex-start;gap:10px;margin-bottom:16px}
+.concept-headline svg{width:20px!important;height:20px!important;flex-shrink:0;margin-top:1px;color:#913c2f}
+.concept-headline strong{display:block;font-size:1.02rem;color:#192c31;line-height:1.4}
+.concept-headline span{display:block;margin-top:2px;font-size:.8rem;color:#53636e}
+.detail-bridge{display:flex;align-items:center;gap:12px;margin:14px 0;padding:14px 16px;border-radius:10px;background:#eef6f0;border:1px solid #c7e3cd;cursor:pointer;width:100%;text-align:left}
+.detail-bridge:hover{background:#e3f1e6}
+.detail-bridge svg{width:18px!important;height:18px!important;flex-shrink:0;color:#1e7a41}
+.detail-bridge strong{display:block;font-size:.88rem;color:#192c31}
+.detail-bridge span{display:block;margin-top:2px;font-size:.78rem;color:#53636e}
+.detail-bridge .detail-bridge-arrow{margin-left:auto;color:#1e7a41}
+
+/* --- Resumen ejecutivo: fuentes conectadas + riesgo de portafolio --- */
+.fuentes-resumen{margin-bottom:18px}
+.fuentes-resumen-label{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:.82rem;font-weight:600;color:#53636e}
+.fuentes-resumen-label svg{width:16px!important;height:16px!important;color:#1e7a41}
+.fuentes-resumen-list{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.fuentes-resumen-item{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:10px;border:1px solid #d9e0e7;background:#fff;text-align:left;cursor:pointer;transition:border-color .15s,background .15s}
+.fuentes-resumen-item:hover{border-color:#9db3bf;background:#f7f9fa}
+.fuentes-resumen-item svg{width:18px!important;height:18px!important;flex-shrink:0;color:#3c5560}
+.fuentes-resumen-item strong{display:flex;align-items:center;gap:6px;font-size:.85rem;color:#192c31}
+.fuentes-resumen-item span{display:block;margin-top:2px;font-size:.75rem;color:#53636e}
+.concept-badge-inline{padding:1px 6px;border-radius:999px;background:#fdf1dd;border:1px solid #f0d6a6;color:#93611a;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.02em}
+@media(max-width:900px){.fuentes-resumen-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.fuentes-resumen-list{grid-template-columns:1fr}}
+
+.riesgo-portafolio{margin-bottom:24px}
+.riesgo-portafolio-list{display:flex;flex-direction:column;gap:10px}
+.riesgo-portafolio-row{display:flex;align-items:center;gap:14px;width:100%;padding:14px 16px;border-radius:10px;border:1px solid #d9e0e7;background:#fff;text-align:left;cursor:pointer;transition:border-color .15s,background .15s}
+.riesgo-portafolio-row:hover{border-color:#9db3bf;background:#f7f9fa}
+.riesgo-portafolio-copy{flex:1;min-width:0}
+.riesgo-portafolio-copy strong{display:block;font-size:.9rem;color:#192c31}
+.riesgo-portafolio-copy span{display:block;margin-top:2px;font-size:.78rem;color:#53636e}
+.riesgo-portafolio-copy small{display:block;margin-top:3px;font-size:.72rem;color:#8a97a0}
+.riesgo-portafolio-arrow{width:16px!important;height:16px!important;flex-shrink:0;color:#8a97a0}
+.riesgo-pill{flex-shrink:0;padding:4px 10px;border-radius:999px;font-size:.7rem;font-weight:700;white-space:nowrap}
+.riesgo-alto{background:#fbe5e2;color:#a13327}
+.riesgo-medio{background:#fdf1dd;color:#93611a}
+.riesgo-bajo{background:#e6f4ea;color:#1e7a41}
+.riesgo-portafolio-footer{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:14px;padding:10px;border-radius:8px;border:1px dashed #d9e0e7;background:transparent;font-size:.8rem;font-weight:600;color:#3c5560;cursor:pointer}
+.riesgo-portafolio-footer:hover{background:#f7f9fa}
+.riesgo-portafolio-footer svg{width:14px!important;height:14px!important}
 .finanzas-table th,.finanzas-table td{white-space:nowrap}
 .finanzas-table td:nth-child(2),.finanzas-table th:nth-child(2){white-space:normal}
 .bond-status-vigente{background:#e6f4ea;color:#1e7a41;border-color:#bfe3cb}
