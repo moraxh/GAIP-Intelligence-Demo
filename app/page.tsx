@@ -22,14 +22,13 @@ import {
 } from '@/lib/mock-data';
 import { FinanzasView } from '@/components/dashboard/finanzas-view';
 import { ObraView } from '@/components/dashboard/obra-view';
-import { MatchingEngineView } from '@/components/dashboard/matching-engine-view';
 import {
-  bondsPorVencer, cobranzaConsolidada, diasEntreFallo, proyectoPorId, proyectos, semaforoDesfase,
-  matchResultPorProyecto, matchResultPorLicitacion, matchResults, riesgoPortafolio, type RiesgoNivel,
+  bondsPorVencer, cobranzaConsolidada, diasEntreFallo, diasParaVencer, montoTotal, proyectoPorId, proyectos, semaforoDesfase, totalFacturado,
+  matchResultPorProyecto, matchResultPorLicitacion, matchResults, riesgoPortafolio as _riesgoPortafolio,
 } from '@/lib/mock-data-finanzas-obra';
 import { fmtMXN, licitacionPorId as licitacionPorIdSafe } from '@/lib/mock-data-helpers';
 
-type View = 'panorama' | 'licitaciones' | 'ofertas' | 'detalle' | 'finanzas' | 'obra' | 'matching';
+type View = 'panorama' | 'licitaciones' | 'ofertas' | 'detalle' | 'finanzas' | 'obra';
 type RoutedView = Exclude<View, 'detalle'>;
 
 const viewRoutes: Record<RoutedView, string> = {
@@ -38,25 +37,17 @@ const viewRoutes: Record<RoutedView, string> = {
   ofertas: '/ofertas',
   finanzas: '/finanzas',
   obra: '/obra',
-  matching: '/cruce',
 };
 type ChatKey = 'vence' | 'avance' | 'oferta' | 'cruce' | 'sinArrancar' | 'ofertaVsLicitacion' | 'pipeline' | 'moneda' | 'fianzaVence' | 'cobranza' | 'avanceObra' | 'cruceAutomatico' | 'cruceSinVincular';
 type ModelContext = { registerTool: (tool: Record<string, unknown>, options?: { signal?: AbortSignal }) => void | Promise<void> };
 
-// --- Pieza 5: barra de módulos de empresa. Licitaciones es UN módulo conectado; RH/Finanzas/Obra
-// son módulos aparte, no fuentes de datos — comparten el mismo patrón visual "gris = no conectado"
-// que las fuentes del mapa, pero viven a nivel de producto/empresa, no de dato.
-type ModuloKey = 'licitaciones' | 'rh' | 'finanzas' | 'obra';
+// --- Módulos adicionales. Las páginas operativas viven en una sola navegación;
+// RH permanece como módulo no conectado sin duplicar Licitaciones, Finanzas u Obra.
+type ModuloKey = 'rh';
 const moduloInfo: Record<ModuloKey, { label: string; icon: typeof Building2 }> = {
-  licitaciones: { label: 'Licitaciones', icon: FileStack },
   rh: { label: 'RH', icon: UserRound },
-  finanzas: { label: 'Finanzas', icon: Wallet },
-  obra: { label: 'Obra', icon: HardHat },
 };
-// RH reusa el diálogo "no conectado" ya construido para el mapa de fuentes — mismas
-// reglas de honestidad visual: sin salida propia, solo el estado gris. Finanzas/Obra
-// pasaron a "vista de concepto" (ver FlaskConical en ModuleBar): tienen vista propia,
-// pero con datos ilustrativos, no reales — ver lib/mock-data-finanzas-obra.ts.
+// RH reusa el diálogo "no conectado" ya construido para el mapa de fuentes.
 const modulosNoConectados: { key: string; label: string; hoy: string; con: string }[] = [
   {
     key: 'rh',
@@ -66,17 +57,8 @@ const modulosNoConectados: { key: string; label: string; hoy: string; con: strin
   },
 ];
 
-// Un solo estado por módulo (en vez de dos arrays que había que mantener en sync):
-// evita combinaciones imposibles como "ilustrativo pero no conectado".
-type ModuloEstado = 'conectado' | 'ilustrativo' | 'no_conectado';
-const MODULO_ESTADO: Record<ModuloKey, ModuloEstado> = {
-  licitaciones: 'conectado',
-  rh: 'no_conectado',
-  finanzas: 'ilustrativo',
-  obra: 'ilustrativo',
-};
+const MODULO_ESTADO: Record<ModuloKey, 'no_conectado'> = { rh: 'no_conectado' };
 
-const entityBars = porEntidad.slice(0, 5);
 const fallosFechadosPorId = new Map(hitos.map(({ id, fecha }) => [id, fecha]));
 
 const licitacionPorId = (id: string) => licitaciones.find((item) => item.id === id)!;
@@ -252,7 +234,6 @@ export default function Home({ initialView = 'panorama' }: { initialView?: Route
     if (next !== 'licitaciones') setOnlyHitos(false);
   }, [router]);
   const openHitos = () => { setOnlyHitos(true); setQuery(''); setStateFilter('Todos'); setEntityFilter('Todas'); setTenderPage(0); navigate('licitaciones'); };
-  const moduloActivo: ModuloKey = view === 'finanzas' ? 'finanzas' : view === 'obra' ? 'obra' : 'licitaciones';
   const modulosGris = modulosNoConectados.find((m) => m.key === moduloAbierto);
   const hitosIds = useMemo(() => new Set(hitos.map((h) => h.id)), []);
 
@@ -328,17 +309,14 @@ export default function Home({ initialView = 'panorama' }: { initialView?: Route
               <BriefcaseBusiness className="nav-icon" /><span className="nav-copy">Ofertas</span><span className="nav-count">{oferta ? 1 : 0}</span>
             </Button>
             <Button variant="ghost" aria-label="Finanzas, vista de concepto" aria-current={view === 'finanzas' ? 'page' : undefined} className={`nav-item ${view === 'finanzas' ? 'active' : ''}`} onClick={() => navigate('finanzas')}>
-              <Wallet className="nav-icon" /><span className="nav-copy">Finanzas</span><FlaskConical className="nav-icon-concept" aria-hidden="true" />
+              <Wallet className="nav-icon" /><span className="nav-copy">Finanzas</span>
             </Button>
             <Button variant="ghost" aria-label="Obra, vista de concepto" aria-current={view === 'obra' ? 'page' : undefined} className={`nav-item ${view === 'obra' ? 'active' : ''}`} onClick={() => navigate('obra')}>
-              <HardHat className="nav-icon" /><span className="nav-copy">Obra</span><FlaskConical className="nav-icon-concept" aria-hidden="true" />
-            </Button>
-            <Button variant="ghost" aria-label="Cruce de datos, motor en vivo" aria-current={view === 'matching' ? 'page' : undefined} className={`nav-item ${view === 'matching' ? 'active' : ''}`} onClick={() => navigate('matching')}>
-              <GitMerge className="nav-icon" /><span className="nav-copy">Cruce</span><FlaskConical className="nav-icon-concept" aria-hidden="true" />
+              <HardHat className="nav-icon" /><span className="nav-copy">Obra</span>
             </Button>
           </div>
         </nav>
-        <ModuleBar activo={moduloActivo} onModuleClick={(key) => { if (key === 'finanzas' || key === 'obra') navigate(key); else if (key === 'licitaciones') navigate('panorama'); else setModuloAbierto(key); }} />
+        <ModuleBar onModuleClick={(key) => setModuloAbierto(key)} />
         <div className="sidebar-footer">
           <div className="profile-card">
             <span className="avatar">US</span>
@@ -350,7 +328,7 @@ export default function Home({ initialView = 'panorama' }: { initialView?: Route
       <section className="workspace" id="main-content" tabIndex={-1}>
         <header className="topbar">
           <div>
-            <h1>{view === 'panorama' ? 'Panorama operativo' : view === 'licitaciones' ? 'Licitaciones unificadas' : view === 'ofertas' ? 'Ofertas' : view === 'finanzas' ? 'Finanzas' : view === 'obra' ? 'Obra' : view === 'matching' ? 'Cruce de datos' : 'Detalle del expediente'}</h1>
+            <h1>{view === 'panorama' ? 'Panorama operativo' : view === 'licitaciones' ? 'Licitaciones unificadas' : view === 'ofertas' ? 'Ofertas' : view === 'finanzas' ? 'Finanzas' : view === 'obra' ? 'Obra' : 'Detalle del expediente'}</h1>
           </div>
           <div className="top-actions">
             <button className="command-search" onClick={() => setChatOpen(true)} aria-label="Abrir consultas operativas">
@@ -382,8 +360,7 @@ export default function Home({ initialView = 'panorama' }: { initialView?: Route
           {view === 'ofertas' && <OfertasView />}
           {view === 'finanzas' && <FinanzasView />}
           {view === 'obra' && <ObraView />}
-          {view === 'matching' && <MatchingEngineView />}
-          {view === 'detalle' && selected && <DetailView item={selected} onBack={() => navigate('licitaciones')} onGoToMatch={() => navigate('matching')} />}
+          {view === 'detalle' && selected && <DetailView item={selected} onBack={() => navigate('licitaciones')} onGoToFinance={() => navigate('finanzas')} />}
         </div>
       </section>
 
@@ -395,28 +372,22 @@ export default function Home({ initialView = 'panorama' }: { initialView?: Route
 
 type Licitation = Licitacion;
 
-// --- Pieza 5: barra de módulos de empresa. Encuadra Licitaciones como UN módulo, no el producto.
-// Finanzas/Obra son un tercer estado visual: "vista de concepto" (FlaskConical), ni el real
-// verificado de Licitaciones ni el gris bloqueado de RH — ver docs/ejemplo-ilustrativo-cruce.md. ---
-function ModuleBar({ activo, onModuleClick }: { activo: ModuloKey; onModuleClick: (key: ModuloKey) => void }) {
-  const modulos: ModuloKey[] = ['licitaciones', 'rh', 'finanzas', 'obra'];
-  return <nav className="module-bar" aria-label="Módulos de la empresa">
-    <span className="module-bar-label">GAIP ·</span>
+function ModuleBar({ onModuleClick }: { onModuleClick: (key: ModuloKey) => void }) {
+  const modulos: ModuloKey[] = ['rh'];
+  return <nav className="module-bar" aria-label="Módulos adicionales">
+    <span className="module-bar-label">Módulos</span>
     <div className="module-bar-list">
       {modulos.map((key) => {
         const info = moduloInfo[key];
         const estado = MODULO_ESTADO[key];
         const conectado = estado !== 'no_conectado';
-        const ilustrativo = estado === 'ilustrativo';
-        const isActive = key === activo;
         return <button
           key={key}
-          className={`module-pill ${conectado ? 'on' : 'off'} ${isActive ? 'active' : ''}`}
-          aria-current={isActive ? 'page' : undefined}
+          className={`module-pill ${conectado ? 'on' : 'off'}`}
           aria-haspopup={conectado ? undefined : 'dialog'}
-          title={ilustrativo ? 'Vista de concepto: datos ilustrativos, no reales' : conectado ? undefined : 'Vista de demostración: módulo no conectado'}
+          title={conectado ? undefined : 'Vista de demostración: módulo no conectado'}
           onClick={() => onModuleClick(key)}
-        ><info.icon />{info.label}{!conectado && <Lock className="module-pill-lock" />}{ilustrativo && <FlaskConical className="module-pill-concept" aria-hidden="true" />}</button>;
+        ><info.icon />{info.label}{!conectado && <Lock className="module-pill-lock" />}</button>;
       })}
     </div>
   </nav>;
@@ -438,64 +409,186 @@ function GraySourceDialog({ label, hoy, con, onClose }: { label: string; hoy: st
 }
 
 function Dashboard({ onAll, onHitos, onDetail, onNavigateView }: { onAll: () => void; onHitos: () => void; onDetail: (item: Licitacion) => void; onNavigateView: (view: View) => void }) {
-  const expedientesConTareas = licitaciones.filter((item) => item.tareas?.length).length;
-  const metrics = [
-    { label:'Invitaciones sin procesar', value: fuentes.totalInvitacionesSinProcesar.toLocaleString('es-MX'), detail:'Esperando filtro de GAIP, aún no entran al pipeline', icon:FileStack },
-    { label:'Expedientes históricos', value: historicoResumen.totalExpedientes.toLocaleString('es-MX'), detail:`${historicoResumen.totalSnapshots} cortes consolidados`, icon:Database },
-    { label:'Expedientes con tareas', value:String(expedientesConTareas), detail:'Con avances registrados en la fuente', icon:Gauge },
-    { label:'Oferta en seguimiento', value: oferta.monto, detail:`${oferta.empresa} · ${oferta.proyecto}`, icon:TrendingUp },
+  const puertoVallarta = licitacionPorId('XLS-SIOPESMA0BLP05692026');
+  const tramoIII = licitacionPorId('XLS-LO09JZO009JZO001N342026');
+  const tareasPuertoSinIniciar = puertoVallarta.tareas?.filter((tarea) => tarea.avance === 0).length ?? 0;
+  const tareasTramoIIISinIniciar = tramoIII.tareas?.filter((tarea) => tarea.avance === 0).length ?? 0;
+  const tareasAliciaConFallo = [...aliciaAbiertasTramoII, ...aliciaAbiertasTramoIII];
+  const entityBars = porEntidad.slice(0, 5);
+  const cobranza = cobranzaConsolidada();
+  const executionRows = proyectos.map((proyecto) => {
+    const total = montoTotal(proyecto.id);
+    const facturado = totalFacturado(proyecto.id);
+    const { desfase, nivel } = semaforoDesfase(proyecto.id);
+    return { proyecto, facturadoPct: total > 0 ? Math.round((facturado / total) * 100) : 0, desfase, nivel };
+  }).sort((a, b) => b.desfase - a.desfase).slice(0, 3);
+  const fianzasProximas = bondsPorVencer.slice(0, 2).map((fianza) => {
+    const proyecto = proyectoPorId(fianza.proyectoId);
+    const match = matchResultPorProyecto(fianza.proyectoId);
+    const licitacion = match?.licitacionId ? licitacionPorIdSafe(match.licitacionId) : undefined;
+    return { fianza, proyecto, dias: diasParaVencer(fianza), licitacion };
+  }).filter((item): item is typeof item & { proyecto: NonNullable<typeof item.proyecto> } => Boolean(item.proyecto));
+  const alertas = [
+    {
+      level: 'alto',
+      label: 'Atención alta',
+      title: 'Puerto Vallarta',
+      summary: `Fallo el ${puertoVallarta.fallo}: ${tareasPuertoSinIniciar} tareas siguen en 0%.`,
+      evidence: [`ComprasMX · fallo ${puertoVallarta.fallo}`, `Gantt · ${tareasPuertoSinIniciar} de ${puertoVallarta.tareas?.length ?? 0} tareas en 0%`],
+      sourceText: 'ComprasMX × Excel de Gantt',
+      item: puertoVallarta,
+    },
+    {
+      level: 'medio',
+      label: 'Atención media',
+      title: 'Tramo III · ATTRAPI',
+      summary: `Fallo el ${tramoIII.fallo}: ${tareasTramoIIISinIniciar} tareas todavía no arrancan.`,
+      evidence: [`ComprasMX · fallo ${tramoIII.fallo}`, `Gantt · ${tareasTramoIIISinIniciar} de ${tramoIII.tareas?.length ?? 0} tareas en 0%`],
+      sourceText: 'ComprasMX × Excel de Gantt',
+      item: tramoIII,
+    },
+    {
+      level: 'medio',
+      label: 'Atención media',
+      title: 'Capacidad de Alicia',
+      summary: `Tiene ${tareasAliciaConFallo.length} tareas abiertas repartidas en 2 expedientes con fallo próximo.`,
+      evidence: [`Gantt · ${aliciaCarga.asignaciones} tareas asignadas`, `ComprasMX · 2 fallos próximos`],
+      sourceText: 'Excel de Gantt × ComprasMX',
+      item: tramoIIICapacidad,
+    },
   ];
-  return <div className="executive-dashboard">
-    <div className="page-heading"><div><h2>Resumen ejecutivo</h2><p>Corte operativo al {fuentes.corte}.</p></div><Button variant="outline" onClick={onAll}>Abrir directorio <ChevronRight /></Button></div>
 
-    <FuentesConectadasResumen onNavigateView={onNavigateView} />
-    <RiesgoPortafolioResumen onNavigateView={onNavigateView} />
+  const sources = [
+    { label: 'ComprasMX', type: 'Cruce activo', detail: 'Fechas de fallo, etapa y expediente', icon: FileStack, view: 'licitaciones' as View, status: 'active' },
+    { label: 'Excel de Gantt', type: 'Cruce activo', detail: 'Tareas, avance y responsables', icon: Users, view: 'licitaciones' as View, status: 'active' },
+    { label: 'Excel de Ofertas', type: 'Módulo independiente', detail: `${oferta.monto} · ${oferta.empresa}`, icon: TrendingUp, view: 'ofertas' as View, status: 'independent' },
+    { label: 'Tablero de Proyectos', type: 'Vista de concepto', detail: `${proyectos.length} proyectos ilustrativos`, icon: Building2, view: 'finanzas' as View, status: 'illustrative' },
+  ];
 
-    <section className="consolidation-story" aria-label="Estado del corte operativo">
-      <div className="story-intro"><span>ESTADO DEL CORTE</span><strong><b>{fuentes.totalProcesosUnicos}</b> procesos únicos</strong><small>Consolidados desde {fuentes.totalListasOrigen} listas de origen</small></div>
-      <div className="story-step"><div><span>Registros recibidos</span><strong>{fuentes.totalRegistrosRecibidos}</strong><small>en el corte actual</small></div></div>
-      <div className="story-step"><div><span>Duplicados detectados</span><strong>{fuentes.totalDuplicados}</strong><small>conciliados automáticamente</small></div></div>
-      <div className="story-step featured"><div><span>Cobertura</span><strong>{Math.round((fuentes.totalProcesosUnicos / fuentes.totalRegistrosRecibidos) * 100)}%</strong><small>de registros únicos</small></div></div>
-      {hitos.length > 0 && <button onClick={onHitos}><span className="story-alert-icon"><AlertTriangle /></span><div><small>REQUIERE ATENCIÓN</small><strong>{hitos.length} hitos próximos</strong><span>Ver los {hitos.length} expedientes con fallo próximo</span></div><ChevronRight /></button>}
+  return <div className="executive-dashboard decision-dashboard">
+    <div className="page-heading decision-heading">
+      <div><p className="decision-kicker">PANORAMA DE OPERACIÓN</p><h2>Decisiones de la semana</h2><p>Hallazgos producidos al comparar fechas, avance y responsables · corte {fuentes.corte}.</p></div>
+      <div className="decision-heading-actions"><span className="decision-cut"><Database />{fuentes.corte}</span><Button variant="outline" onClick={onAll}>Abrir directorio <ChevronRight /></Button></div>
+    </div>
+
+    <section className="decision-overview" aria-label="Resumen de decisiones">
+      <div className="decision-overview-lead"><span>PRIORIZACIÓN DEL CORTE</span><strong>{alertas.length} alertas con evidencia</strong><small>Ordenadas por fecha de fallo y trabajo pendiente.</small></div>
+      <div className="decision-overview-stat"><span>Fuentes en el modelo</span><strong>{sources.length}</strong><small>2 cruces activos · 2 capas complementarias</small></div>
+      <div className="decision-overview-stat"><span>Hitos próximos</span><strong>{hitos.length}</strong><small>con expediente identificable</small></div>
+      <button className="decision-overview-action" onClick={onHitos}><AlertTriangle /><span><small>ACCIÓN SUGERIDA</small><strong>Revisar los {hitos.length} fallos próximos</strong><em>Abrir expedientes con fecha clave</em></span><ChevronRight /></button>
     </section>
 
-    <section className="metric-grid">
-      {metrics.map((metric) => <Card className="executive-metric" key={metric.label}><CardHeader><div className="metric-glyph"><metric.icon /></div><span>{metric.label}</span></CardHeader><CardContent><strong>{metric.value}</strong><p>{metric.detail}</p></CardContent></Card>)}
-    </section>
-
-    <AiExecutiveInsights onDetail={onDetail} />
-
-    <section className="dashboard-card-columns">
-      <div className="dashboard-card-column">
-        <Card className="executive-card pipeline-card"><CardHeader><div><CardTitle>Portafolio por etapa</CardTitle><p>Conteo de registros en listas de origen por etapa</p></div><Button variant="ghost" size="sm" onClick={onAll}>Abrir listado</Button></CardHeader><CardContent><div className="pipeline-chart">{stages.map((stage) => <div className="pipeline-row" key={stage.label}><div><span>{stage.label}</span><strong>{stage.value}</strong></div><div className="pipeline-bar"><i style={{ width:`${Math.max(12, stage.value * 2.25)}%`, background:stage.color }} /></div></div>)}</div><div className="portfolio-note"><Database /><span>Los conteos pueden incluir procesos presentes en más de una lista.</span></div></CardContent></Card>
-        <Card className="executive-card entity-card"><CardHeader><div><CardTitle>Procesos por entidad</CardTitle><p>Muestra operativa disponible</p></div><MapPin /></CardHeader><CardContent><div className="bar-chart">{entityBars.map((bar) => <div className="bar-row" key={bar.name}><span>{bar.name}</span><div><i style={{ width:`${(bar.value / entityBars[0].value) * 100}%` }} /></div><strong>{bar.value}</strong></div>)}</div></CardContent></Card>
-        <HistoricoAnalisis />
+    <section className="decision-findings" aria-labelledby="decision-findings-title">
+      <div className="decision-section-heading"><div><h3 id="decision-findings-title">Hallazgos que requieren decisión</h3><p>Cada fila combina al menos dos fuentes y muestra la evidencia que la origina.</p></div><span>3 prioridades</span></div>
+      <div className="decision-finding-list">
+        {alertas.map((alerta) => <button className="decision-finding-row" key={alerta.title} onClick={() => onDetail(alerta.item)} aria-label={`Abrir evidencia de ${alerta.title}`}>
+          <span className={`decision-level decision-level-${alerta.level}`}>{alerta.label}</span>
+          <div className="decision-finding-copy"><strong>{alerta.title}</strong><span>{alerta.summary}</span><div className="decision-evidence">{alerta.evidence.map((item) => <small key={item}>{item}</small>)}</div></div>
+          <span className="decision-finding-source">{alerta.sourceText}</span><span className="decision-open">Abrir evidencia <ChevronRight /></span>
+        </button>)}
       </div>
-      <div className="dashboard-card-column">
-        <Card className="executive-card milestones-card"><CardHeader><div><CardTitle>Próximos fallos</CardTitle><p>Fecha en que la dependencia resuelve el ganador · corte {fuentes.corte}</p></div><CalendarDays /></CardHeader><CardContent><div className="deadline-list">{hitos.map((hito) => { const item = licitacionPorId(hito.id); const [dia, mes] = hito.fecha.split(' '); return <button className="deadline" key={item.id} onClick={() => onDetail(item)}><div className="date risk"><strong>{dia}</strong><span>{mes.toUpperCase()}</span></div><div><strong>{item.dependencia}</strong><span>{item.nombre}</span></div><ChevronRight /></button>; })}</div></CardContent></Card>
-        <Card className="executive-card workload-card"><CardHeader><div><CardTitle>Avance por responsable</CardTitle><p>Promedio de tareas asignadas · fuente: Excel de Gantt</p></div><Users /></CardHeader><CardContent><div className="workload-list">{carga.map((person) => <div className="workload" key={person.nombre}><div><strong>{person.nombre}</strong><span>{person.asignaciones} tareas</span></div><b>{person.avance}%</b><Progress value={person.avance} /></div>)}</div></CardContent></Card>
+      <p className="decision-proof"><Database />Los hallazgos se calculan desde los datos del corte; no se mezclan con proyectos ilustrativos.</p>
+    </section>
+
+    <section className="decision-execution" aria-labelledby="decision-execution-title">
+      <div className="decision-section-heading"><div><h3 id="decision-execution-title">Ejecución de adjudicados</h3><p>La segunda capa del panorama: obra, facturación y obligaciones posteriores al fallo.</p></div><span className="decision-illustrative-badge">Datos ilustrativos · no afecta alertas reales</span></div>
+      <div className="decision-execution-metrics">
+        <div><span>Proyectos activos</span><strong>{proyectos.length}</strong><small>en el tablero de proyectos</small></div>
+        <div><span>Facturado del portafolio</span><strong>{fmtMXN(cobranza.facturado)}</strong><small>{fmtMXN(cobranza.pendientePorCobrar)} pendiente por cobrar</small></div>
+        <div><span>Por ejercer</span><strong>{fmtMXN(cobranza.porEjercer)}</strong><small>sobre {fmtMXN(cobranza.montoTotal)} contratados</small></div>
+      </div>
+      <div className="decision-execution-grid">
+        <article className="decision-execution-card">
+          <div className="decision-execution-card-heading"><div><h4>Obra vs. facturación</h4><p>Los desfases más importantes del portafolio ilustrativo.</p></div><button onClick={() => onNavigateView('obra')}>Ver Obra <ArrowRight /></button></div>
+          <ul className="decision-execution-list">
+            {executionRows.map(({ proyecto, facturadoPct, desfase, nivel }) => <li key={proyecto.id}><div className="decision-execution-project"><strong>{proyecto.name}</strong><small>{proyecto.client}</small></div><div className="decision-execution-values"><div className="decision-execution-measure"><span>Obra <b>{proyecto.progress}%</b></span><i><i style={{ width: `${proyecto.progress}%` }} /></i></div><div className="decision-execution-measure"><span>Facturado <b>{facturadoPct}%</b></span><i><i style={{ width: `${facturadoPct}%` }} /></i></div><em className={`decision-drift-${nivel}`}>{desfase} pts</em></div></li>)}
+          </ul>
+          <p className="decision-execution-note"><Database />Cruce conceptual: avance físico del tablero contra facturación de Finanzas.</p>
+        </article>
+
+        <article className="decision-execution-card decision-execution-bond">
+          <div className="decision-execution-card-heading"><div><h4>Fianza por vencer</h4><p>Obligación post-adjudicación que hoy queda fuera de ComprasMX.</p></div><button onClick={() => onNavigateView('finanzas')}>Ver Finanzas <ArrowRight /></button></div>
+          {fianzasProximas.length ? <ul className="decision-bond-list">{fianzasProximas.map(({ fianza, proyecto, dias, licitacion }) => <li key={fianza.id}><div className="decision-bond-date"><strong>{dias}</strong><small>días</small></div><div className="decision-bond-copy"><strong>{proyecto.name}</strong><span>Vence el {fianza.expiryDate} · {fianza.type}</span>{licitacion && <small>Origen cruzado: {licitacion.dependencia} · fallo {licitacion.fallo ?? 'sin fecha'}</small>}</div></li>)}</ul> : <p className="decision-execution-empty">No hay fianzas próximas a vencer.</p>}
+          <p className="decision-execution-note"><Database />La demostración usa contratos, facturas y fianzas ilustrativos, no datos reales de GAIP.</p>
+        </article>
       </div>
     </section>
 
-    <CapacidadVsDemanda onDetail={onDetail} />
+    <section className="decision-context" aria-labelledby="decision-context-title">
+      <div className="decision-section-heading"><div><h3 id="decision-context-title">Contexto operativo del corte</h3><p>La lectura completa que acompaña a las prioridades: volumen, fechas, equipo y concentración.</p></div><span>{fuentes.totalProcesosUnicos} procesos únicos</span></div>
+      <div className="decision-context-grid">
+        <div className="decision-context-column">
+          <article className="decision-context-card decision-context-pipeline">
+            <div className="decision-context-card-heading"><div><h4>Pipeline por etapa</h4><p>Registros del corte por estado</p></div><strong>{fuentes.totalRegistrosRecibidos}</strong></div>
+            <div className="decision-pipeline-list">
+              {stages.map((stage) => <div className="decision-pipeline-row" key={stage.label}><div className="decision-pipeline-label"><span>{stage.label}</span><strong>{stage.value}</strong></div><div className="decision-pipeline-bar"><i style={{ width: `${Math.min(100, Math.max(8, (stage.value / Math.max(...stages.map((item) => item.value))) * 100))}%`, background: stage.color }} /></div></div>)}
+            </div>
+            <p className="decision-context-note"><Database />Los conteos vienen de listas de origen y pueden repetirse entre etapas.</p>
+          </article>
+
+          <article className="decision-context-card decision-context-workload">
+            <div className="decision-context-card-heading"><div><h4>Carga del equipo</h4><p>Tareas asignadas y avance promedio</p></div><Users /></div>
+            <div className="decision-workload-list">
+              {carga.map((person) => <div className="decision-workload-row" key={person.nombre}><div><strong>{person.nombre}</strong><small>{person.asignaciones} tareas</small></div><b>{person.avance}%</b><span className="decision-workload-bar"><i style={{ width: `${person.avance}%` }} /></span></div>)}
+            </div>
+          </article>
+        </div>
+
+        <div className="decision-context-column">
+          <article className="decision-context-card decision-context-deadlines">
+            <div className="decision-context-card-heading"><div><h4>Próximos fallos</h4><p>Fechas clave del corte</p></div><button onClick={onHitos}>Ver todos <ArrowRight /></button></div>
+            <ul className="decision-deadline-list">
+              {hitos.slice(0, 4).map((hito) => { const item = licitacionPorId(hito.id); const [dia, mes] = hito.fecha.split(' '); return <li key={item.id}><button onClick={() => onDetail(item)}><span className="decision-date"><strong>{dia}</strong><small>{mes.toUpperCase()}</small></span><span className="decision-deadline-copy"><strong>{item.dependencia}</strong><small>{item.nombre}</small></span><ChevronRight /></button></li>; })}
+            </ul>
+          </article>
+
+          <article className="decision-context-card decision-context-entities">
+            <div className="decision-context-card-heading"><div><h4>Concentración por entidad</h4><p>Procesos únicos identificados</p></div><MapPin /></div>
+            <div className="decision-entity-list">
+              {entityBars.map((bar) => <div className="decision-entity-row" key={bar.name}><span>{bar.name}</span><div><i style={{ width: `${(bar.value / entityBars[0].value) * 100}%` }} /></div><strong>{bar.value}</strong></div>)}
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section className="decision-sources" aria-labelledby="decision-sources-title">
+      <div className="decision-section-heading"><div><h3 id="decision-sources-title">Cómo se llegó a estas decisiones</h3><p>Las fuentes tienen roles distintos dentro del modelo. No todas alimentan el ranking.</p></div><span>{sources.length} fuentes · 2 cruces activos</span></div>
+      <div className="decision-source-grid">
+        {sources.map((source) => <button className={`decision-source-card decision-source-${source.status}`} key={source.label} onClick={() => onNavigateView(source.view)}>
+          <span className="decision-source-icon"><source.icon /></span><span className="decision-source-copy"><strong>{source.label}</strong><small>{source.type}</small><em>{source.detail}</em></span><ChevronRight className="decision-source-arrow" />
+        </button>)}
+      </div>
+    </section>
+
+    <section className="decision-quality" aria-labelledby="decision-quality-title">
+      <div className="decision-section-heading"><div><h3 id="decision-quality-title">Calidad y cobertura del corte</h3><p>Contexto del modelo para interpretar las alertas; no es un segundo ranking.</p></div><Button variant="ghost" size="sm" onClick={onAll}>Ver directorio <ArrowRight /></Button></div>
+      <div className="decision-quality-grid">
+        <div><span>Procesos únicos</span><strong>{fuentes.totalProcesosUnicos}</strong><small>de {fuentes.totalRegistrosRecibidos} registros recibidos</small></div>
+        <div><span>Duplicados conciliados</span><strong>{fuentes.totalDuplicados}</strong><small>desde {fuentes.totalListasOrigen} listas de origen</small></div>
+        <div><span>Cobertura del corte</span><strong>{Math.round((fuentes.totalProcesosUnicos / fuentes.totalRegistrosRecibidos) * 100)}%</strong><small>registros convertidos en procesos únicos</small></div>
+        <div><span>Histórico disponible</span><strong>{historicoResumen.totalExpedientes.toLocaleString('es-MX')}</strong><small>{historicoResumen.totalSnapshots} cortes consolidados</small></div>
+      </div>
+      <div className="decision-quality-note"><Database /><span>{fuentes.totalInvitacionesSinProcesar.toLocaleString('es-MX')} invitaciones siguen fuera del pipeline porque todavía esperan filtro de GAIP.</span></div>
+    </section>
   </div>;
 }
 
 // Abre el resumen ejecutivo dejando claro, en un vistazo, que este no es un dashboard de
-// una sola fuente: cuenta lo que trae cada una de las 4 y qué tan viva está (2 reales, 1
-// de concepto sobre el motor de cruce). Es el mismo argumento del mapa de fuentes original
+// una sola fuente: cuenta lo que trae cada una de las 4 y qué papel cumple (2 cruces activos,
+// 1 módulo independiente y 1 vista ilustrativa). Es el mismo argumento del mapa de fuentes original
 // del Plan v2, pero como encabezado permanente en vez de pantalla aparte.
-function FuentesConectadasResumen({ onNavigateView }: { onNavigateView: (view: View) => void }) {
+function _FuentesConectadasResumen({ onNavigateView }: { onNavigateView: (view: View) => void }) {
   const fuentesResumen: { label: string; detalle: string; icon: typeof Database; view: View; badge?: string }[] = [
     { label: 'ComprasMX', detalle: `${fuentes.totalProcesosUnicos} procesos únicos`, icon: FileStack, view: 'licitaciones' },
     { label: 'Excel de Gantt', detalle: `${carga.reduce((s, c) => s + c.asignaciones, 0)} tareas · ${carga.length} responsables`, icon: Users, view: 'licitaciones' },
     { label: 'Excel de Ofertas', detalle: `${oferta.monto} en seguimiento`, icon: TrendingUp, view: 'ofertas' },
-    { label: 'Tablero de Proyectos', detalle: `${proyectos.length} proyectos adjudicados`, icon: Building2, view: 'matching', badge: 'concepto' },
+    { label: 'Tablero de Proyectos', detalle: `${proyectos.length} proyectos adjudicados`, icon: Building2, view: 'finanzas', badge: 'concepto' },
   ];
   return <section className="fuentes-resumen" aria-label="Fuentes conectadas al corte">
     <span className="fuentes-resumen-label"><GitMerge />{fuentesResumen.length} fuentes cruzándose en este corte</span>
     <div className="fuentes-resumen-list">
-      {fuentesResumen.map((f) => <button key={f.label} className="fuentes-resumen-item" onClick={() => onNavigateView(f.view)}>
+      {fuentesResumen.map((f) => <button key={f.label} className="fuentes-resumen-item" aria-label={`Abrir fuente ${f.label}`} onClick={() => onNavigateView(f.view)}>
         <f.icon />
         <div><strong>{f.label}{f.badge && <span className="concept-badge-inline">{f.badge}</span>}</strong><span>{f.detalle}</span></div>
       </button>)}
@@ -503,13 +596,13 @@ function FuentesConectadasResumen({ onNavigateView }: { onNavigateView: (view: V
   </section>;
 }
 
-const riesgoNivelLabel: Record<RiesgoNivel, string> = { alto: 'Riesgo alto', medio: 'Riesgo medio', bajo: 'Riesgo bajo' };
+const _riesgoNivelLabel = { alto: 'Riesgo alto', medio: 'Riesgo medio', bajo: 'Riesgo bajo' };
 
 // El insight insignia del cruce (docs/ejemplo-ilustrativo-cruce.md §3.6), promovido del
 // módulo Cruce al resumen ejecutivo: la pregunta "¿qué proyecto necesita atención esta
 // semana?" combinando desfase avance/facturación + margen de fianza + carga de equipo.
-function RiesgoPortafolioResumen({ onNavigateView }: { onNavigateView: (view: View) => void }) {
-  const ranking = riesgoPortafolio();
+function _RiesgoPortafolioResumen({ onNavigateView }: { onNavigateView: (view: View) => void }) {
+  const ranking = _riesgoPortafolio();
   const top = ranking.slice(0, 3);
   return <section className="riesgo-portafolio" aria-label="Riesgo de portafolio, cruzando licitaciones y proyectos adjudicados">
     <Card className="executive-card">
@@ -522,8 +615,8 @@ function RiesgoPortafolioResumen({ onNavigateView }: { onNavigateView: (view: Vi
           {top.map(({ proyecto, nivel, razones }) => {
             const match = matchResultPorProyecto(proyecto.id);
             const licitacion = match?.licitacionId ? licitacionPorId(match.licitacionId) : undefined;
-            return <button key={proyecto.id} className="riesgo-portafolio-row" onClick={() => onNavigateView('matching')}>
-              <span className={`riesgo-pill riesgo-${nivel}`}>{riesgoNivelLabel[nivel]}</span>
+            return <button key={proyecto.id} className="riesgo-portafolio-row" onClick={() => onNavigateView('finanzas')}>
+              <span className={`riesgo-pill riesgo-${nivel}`}>{_riesgoNivelLabel[nivel]}</span>
               <div className="riesgo-portafolio-copy">
                 <strong>{proyecto.name}</strong>
                 <span>{razones.length > 0 ? razones.join(' · ') : 'Sin señales de riesgo en este corte.'}</span>
@@ -533,7 +626,7 @@ function RiesgoPortafolioResumen({ onNavigateView }: { onNavigateView: (view: Vi
             </button>;
           })}
         </div>
-        <button className="riesgo-portafolio-footer" onClick={() => onNavigateView('matching')}>
+        <button className="riesgo-portafolio-footer" onClick={() => onNavigateView('finanzas')}>
           Ver el cruce completo de {proyectos.length} proyectos <ArrowRight />
         </button>
       </CardContent>
@@ -543,7 +636,7 @@ function RiesgoPortafolioResumen({ onNavigateView }: { onNavigateView: (view: Vi
 
 // Lectura editorial prototipo: el contenido está hardcodeado a partir del corte real.
 // Cuando exista el servicio de IA, esta superficie puede conservarse y sustituir solo la narrativa.
-function AiExecutiveInsights({ onDetail }: { onDetail: (item: Licitacion) => void }) {
+function _AiExecutiveInsights({ onDetail }: { onDetail: (item: Licitacion) => void }) {
   const alerta = licitacionPorId('XLS-SIOPESMA0BLP05692026');
   return <section className="ai-insights" aria-labelledby="ai-insights-title">
     <div className="ai-briefing">
@@ -569,7 +662,7 @@ function AiExecutiveInsights({ onDetail }: { onDetail: (item: Licitacion) => voi
 // --- Pieza 6: embudo del corte actual (recibidos → únicos → en trabajo). El histórico de 60 cortes
 // se muestra aparte, solo como referencia de escala: no es la misma unidad de medida que el corte de hoy,
 // así que nunca se dividen entre sí (eso daba un falso "0.28% de conversión").
-function HistoricoAnalisis() {
+function _HistoricoAnalisis() {
   const enTrabajo = stages.find((s) => s.label === 'En trabajo')?.value ?? 0;
   const conversionPct = ((enTrabajo / fuentes.totalProcesosUnicos) * 100).toFixed(1);
   return <section className="historico-analisis" aria-label="Análisis del corte">
@@ -594,7 +687,7 @@ function HistoricoAnalisis() {
 }
 
 // --- Pieza 3: Capacidad vs. Demanda con acción y aprobación. ---
-function CapacidadVsDemanda({ onDetail }: { onDetail: (item: Licitacion) => void }) {
+function _CapacidadVsDemanda({ onDetail }: { onDetail: (item: Licitacion) => void }) {
   const { sobrecargada, destino, tareaAMover } = capacidadCaso;
   return <section className="capacidad-demanda" aria-label="Capacidad versus demanda">
     <Card className="executive-card capacidad-card">
@@ -863,7 +956,7 @@ function expedienteInsights(tareas: Tarea[]) {
   return insights.slice(0, 4);
 }
 
-function DetailView({ item, onBack, onGoToMatch }: { item:Licitacion; onBack:()=>void; onGoToMatch:()=>void }) {
+function DetailView({ item, onBack, onGoToFinance }: { item:Licitacion; onBack:()=>void; onGoToFinance:()=>void }) {
   const tareas = item.tareas ?? [];
   const average = tareas.length ? Math.round(tareas.reduce((sum,task) => sum + task.avance,0) / tareas.length) : 0;
   const completed = tareas.filter((task) => task.avance === 100).length;
@@ -891,11 +984,11 @@ function DetailView({ item, onBack, onGoToMatch }: { item:Licitacion; onBack:()=
       </div>
     </article>
 
-    {proyecto && <button type="button" className="detail-bridge" onClick={onGoToMatch}>
+    {proyecto && <button type="button" className="detail-bridge" onClick={onGoToFinance}>
       <GitMerge />
       <div>
         <strong>Este expediente ya tiene proyecto activo: {proyecto.name}</strong>
-        <span>Ver cobranza, avance de obra y fianzas cruzadas — vista de concepto en Cruce de datos</span>
+        <span>Ver cobranza y fianzas cruzadas en Finanzas</span>
       </div>
       <ArrowRight className="detail-bridge-arrow" />
     </button>}
