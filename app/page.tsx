@@ -5,12 +5,11 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
   AlertTriangle, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronLeft,
-  ChevronRight, Database, FileStack, Filter, FlaskConical, Gauge, GitMerge, Lock,
+  ChevronRight, Database, FileStack, Filter, Gauge, GitMerge, Lock,
   MapPin, Search, TrendingUp, Users, X, ArrowRight,
   Building2, Wallet, HardHat, UserRound, MessageCircle, RotateCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -24,7 +23,7 @@ import { FinanzasView } from '@/components/dashboard/finanzas-view';
 import { ObraView } from '@/components/dashboard/obra-view';
 import {
   bondsPorVencer, cobranzaConsolidada, diasEntreFallo, diasParaVencer, montoTotal, proyectoPorId, proyectos, semaforoDesfase, totalFacturado,
-  matchResultPorProyecto, matchResultPorLicitacion, matchResults, riesgoPortafolio as _riesgoPortafolio,
+  matchResultPorProyecto, matchResultPorLicitacion, matchResults, riesgoPortafolio,
 } from '@/lib/mock-data-finanzas-obra';
 import { fmtMXN, licitacionPorId as licitacionPorIdSafe } from '@/lib/mock-data-helpers';
 
@@ -181,31 +180,14 @@ const chatAnswers: Record<ChatKey, { question: string; answer: string; source: s
   },
 };
 
-// --- Pieza 3: Capacidad vs. Demanda — el cruce Gantt x fechas de fallo que ComprasMX no puede hacer. ---
-// Caso real: ALICIA tiene tareas abiertas en dos expedientes con fallo próximo (Tramo II 08-oct, Tramo III 30-sep);
-// LUIS tiene tres tareas abiertas, en un expediente sin fecha de fallo registrada todavía (82km).
+// Caso real: ALICIA tiene tareas abiertas en dos expedientes con fallo próximo (Tramo II 08-oct, Tramo III 30-sep) —
+// usado por el hallazgo "Capacidad de Alicia" en Dashboard.
 const tramoIICapacidad = licitacionPorId('E-2026-00080053');
 const tramoIIICapacidad = licitacionPorId('XLS-LO09JZO009JZO001N342026');
-const km82Capacidad = licitacionPorId('E-2026-00084041');
 
 const aliciaAbiertasTramoII = tramoIICapacidad.tareas!.filter((t) => t.responsable === 'ALICIA' && t.avance < 100);
 const aliciaAbiertasTramoIII = tramoIIICapacidad.tareas!.filter((t) => t.responsable === 'ALICIA' && t.avance < 100);
-const luisAbiertas82km = km82Capacidad.tareas!.filter((t) => t.responsable === 'LUIS' && t.avance < 100);
-const luisAbiertas82kmAvance = luisAbiertas82km.length
-  ? Math.round(luisAbiertas82km.reduce((sum, t) => sum + t.avance, 0) / luisAbiertas82km.length)
-  : 0;
 const aliciaCarga = carga.find((c) => c.nombre === 'Alicia')!;
-const luisCarga = carga.find((c) => c.nombre === 'Luis')!;
-
-const capacidadCaso = {
-  sobrecargada: { nombre: 'ALICIA', carga: aliciaCarga, expedientes: [
-    { item: tramoIICapacidad, tareas: aliciaAbiertasTramoII },
-    { item: tramoIIICapacidad, tareas: aliciaAbiertasTramoIII },
-  ] },
-  destino: { nombre: 'LUIS', carga: luisCarga, expediente: { item: km82Capacidad, tareas: luisAbiertas82km } },
-  // La tarea propuesta a mover: la económica de menor avance en Tramo III (0%), donde ALICIA aún no arranca.
-  tareaAMover: tramoIIICapacidad.tareas!.find((t) => t.responsable === 'ALICIA' && t.nombre === 'Elaborar propuesta económica')!,
-};
 
 function StateBadge({ state }: { state: Estado }) {
   return <span className={`state-badge state-${state.toLowerCase().replace(' ', '-')}`}>{state}</span>;
@@ -428,6 +410,12 @@ function Dashboard({ onAll, onHitos, onDetail, onNavigateView }: { onAll: () => 
     const licitacion = match?.licitacionId ? licitacionPorIdSafe(match.licitacionId) : undefined;
     return { fianza, proyecto, dias: diasParaVencer(fianza), licitacion };
   }).filter((item): item is typeof item & { proyecto: NonNullable<typeof item.proyecto> } => Boolean(item.proyecto));
+  // Único hallazgo de las 4 filas que cruza hasta el Tablero de Proyectos (ilustrativo), no solo
+  // ComprasMX × Gantt: combina desfase avance/facturación + fianza vs. fallo + carga de equipo
+  // en una sola pregunta de negocio (docs/ejemplo-ilustrativo-cruce.md §3.6).
+  const riesgoTop = riesgoPortafolio()[0];
+  const riesgoMatch = riesgoTop ? matchResultPorProyecto(riesgoTop.proyecto.id) : undefined;
+  const riesgoLicitacion = riesgoMatch?.licitacionId ? licitacionPorIdSafe(riesgoMatch.licitacionId) : undefined;
   const alertas = [
     {
       level: 'alto',
@@ -436,7 +424,7 @@ function Dashboard({ onAll, onHitos, onDetail, onNavigateView }: { onAll: () => 
       summary: `Fallo el ${puertoVallarta.fallo}: ${tareasPuertoSinIniciar} tareas siguen en 0%.`,
       evidence: [`ComprasMX · fallo ${puertoVallarta.fallo}`, `Gantt · ${tareasPuertoSinIniciar} de ${puertoVallarta.tareas?.length ?? 0} tareas en 0%`],
       sourceText: 'ComprasMX × Excel de Gantt',
-      item: puertoVallarta,
+      onOpen: () => onDetail(puertoVallarta),
     },
     {
       level: 'medio',
@@ -445,7 +433,7 @@ function Dashboard({ onAll, onHitos, onDetail, onNavigateView }: { onAll: () => 
       summary: `Fallo el ${tramoIII.fallo}: ${tareasTramoIIISinIniciar} tareas todavía no arrancan.`,
       evidence: [`ComprasMX · fallo ${tramoIII.fallo}`, `Gantt · ${tareasTramoIIISinIniciar} de ${tramoIII.tareas?.length ?? 0} tareas en 0%`],
       sourceText: 'ComprasMX × Excel de Gantt',
-      item: tramoIII,
+      onOpen: () => onDetail(tramoIII),
     },
     {
       level: 'medio',
@@ -454,8 +442,19 @@ function Dashboard({ onAll, onHitos, onDetail, onNavigateView }: { onAll: () => 
       summary: `Tiene ${tareasAliciaConFallo.length} tareas abiertas repartidas en 2 expedientes con fallo próximo.`,
       evidence: [`Gantt · ${aliciaCarga.asignaciones} tareas asignadas`, `ComprasMX · 2 fallos próximos`],
       sourceText: 'Excel de Gantt × ComprasMX',
-      item: tramoIIICapacidad,
+      onOpen: () => onDetail(tramoIIICapacidad),
     },
+    ...(riesgoTop ? [{
+      level: riesgoTop.nivel === 'alto' ? 'alto' : 'medio',
+      label: riesgoTop.nivel === 'alto' ? 'Atención alta' : 'Atención media',
+      title: riesgoTop.proyecto.name,
+      summary: riesgoTop.razones.length > 0 ? riesgoTop.razones.join(' · ') : 'Proyecto adjudicado con señales combinadas de riesgo.',
+      evidence: riesgoLicitacion
+        ? [`ComprasMX × Tablero · vinculado con ${riesgoLicitacion.numero}`, `Fallo real ${riesgoLicitacion.fallo ?? 'sin fecha'}`]
+        : [`Tablero de Proyectos · ${riesgoTop.proyecto.client}`, 'Sin expediente vinculado automáticamente (por debajo del umbral de confianza)'],
+      sourceText: 'ComprasMX × Excel de Gantt × Tablero de Proyectos',
+      onOpen: () => onNavigateView('finanzas'),
+    }] : []),
   ];
 
   const sources = [
@@ -473,15 +472,15 @@ function Dashboard({ onAll, onHitos, onDetail, onNavigateView }: { onAll: () => 
 
     <section className="decision-overview" aria-label="Resumen de decisiones">
       <div className="decision-overview-lead"><span>PRIORIZACIÓN DEL CORTE</span><strong>{alertas.length} alertas con evidencia</strong><small>Ordenadas por fecha de fallo y trabajo pendiente.</small></div>
-      <div className="decision-overview-stat"><span>Fuentes en el modelo</span><strong>{sources.length}</strong><small>2 cruces activos · 2 capas complementarias</small></div>
+      <div className="decision-overview-stat"><span>Fuentes en el modelo</span><strong>{sources.length}</strong><small>{riesgoTop ? '3 cruces activos' : '2 cruces activos'} · {riesgoTop ? '1 capa complementaria' : '2 capas complementarias'}</small></div>
       <div className="decision-overview-stat"><span>Hitos próximos</span><strong>{hitos.length}</strong><small>con expediente identificable</small></div>
       <button className="decision-overview-action" onClick={onHitos}><AlertTriangle /><span><small>ACCIÓN SUGERIDA</small><strong>Revisar los {hitos.length} fallos próximos</strong><em>Abrir expedientes con fecha clave</em></span><ChevronRight /></button>
     </section>
 
     <section className="decision-findings" aria-labelledby="decision-findings-title">
-      <div className="decision-section-heading"><div><h3 id="decision-findings-title">Hallazgos que requieren decisión</h3><p>Cada fila combina al menos dos fuentes y muestra la evidencia que la origina.</p></div><span>3 prioridades</span></div>
+      <div className="decision-section-heading"><div><h3 id="decision-findings-title">Hallazgos que requieren decisión</h3><p>Cada fila combina al menos dos fuentes y muestra la evidencia que la origina.</p></div><span>{alertas.length} prioridades</span></div>
       <div className="decision-finding-list">
-        {alertas.map((alerta) => <button className="decision-finding-row" key={alerta.title} onClick={() => onDetail(alerta.item)} aria-label={`Abrir evidencia de ${alerta.title}`}>
+        {alertas.map((alerta) => <button className="decision-finding-row" key={alerta.title} onClick={alerta.onOpen} aria-label={`Abrir evidencia de ${alerta.title}`}>
           <span className={`decision-level decision-level-${alerta.level}`}>{alerta.label}</span>
           <div className="decision-finding-copy"><strong>{alerta.title}</strong><span>{alerta.summary}</span><div className="decision-evidence">{alerta.evidence.map((item) => <small key={item}>{item}</small>)}</div></div>
           <span className="decision-finding-source">{alerta.sourceText}</span><span className="decision-open">Abrir evidencia <ChevronRight /></span>
@@ -508,7 +507,7 @@ function Dashboard({ onAll, onHitos, onDetail, onNavigateView }: { onAll: () => 
 
         <article className="decision-execution-card decision-execution-bond">
           <div className="decision-execution-card-heading"><div><h4>Fianza por vencer</h4><p>Obligación post-adjudicación que hoy queda fuera de ComprasMX.</p></div><button onClick={() => onNavigateView('finanzas')}>Ver Finanzas <ArrowRight /></button></div>
-          {fianzasProximas.length ? <ul className="decision-bond-list">{fianzasProximas.map(({ fianza, proyecto, dias, licitacion }) => <li key={fianza.id}><div className="decision-bond-date"><strong>{dias}</strong><small>días</small></div><div className="decision-bond-copy"><strong>{proyecto.name}</strong><span>Vence el {fianza.expiryDate} · {fianza.type}</span>{licitacion && <small>Origen cruzado: {licitacion.dependencia} · fallo {licitacion.fallo ?? 'sin fecha'}</small>}</div></li>)}</ul> : <p className="decision-execution-empty">No hay fianzas próximas a vencer.</p>}
+          {fianzasProximas.length ? <ul className="decision-bond-list">{fianzasProximas.map(({ fianza, proyecto, dias, licitacion }) => <li key={fianza.id}><div className="decision-bond-date"><strong>{dias}</strong><small>días</small></div><div className="decision-bond-copy"><strong>{proyecto.name}</strong><span>Vence el {fianza.expiryDate} · {fianza.type}</span>{licitacion ? <small>Origen cruzado: {licitacion.dependencia} · fallo {licitacion.fallo ?? 'sin fecha'}</small> : <small className="decision-bond-unmatched"><AlertTriangle />Sin expediente de origen vinculado automáticamente (por debajo del umbral de confianza) · revisar a mano</small>}</div></li>)}</ul> : <p className="decision-execution-empty">No hay fianzas próximas a vencer.</p>}
           <p className="decision-execution-note"><Database />La demostración usa contratos, facturas y fianzas ilustrativos, no datos reales de GAIP.</p>
         </article>
       </div>
@@ -572,164 +571,6 @@ function Dashboard({ onAll, onHitos, onDetail, onNavigateView }: { onAll: () => 
       <div className="decision-quality-note"><Database /><span>{fuentes.totalInvitacionesSinProcesar.toLocaleString('es-MX')} invitaciones siguen fuera del pipeline porque todavía esperan filtro de GAIP.</span></div>
     </section>
   </div>;
-}
-
-// Abre el resumen ejecutivo dejando claro, en un vistazo, que este no es un dashboard de
-// una sola fuente: cuenta lo que trae cada una de las 4 y qué papel cumple (2 cruces activos,
-// 1 módulo independiente y 1 vista ilustrativa). Es el mismo argumento del mapa de fuentes original
-// del Plan v2, pero como encabezado permanente en vez de pantalla aparte.
-function _FuentesConectadasResumen({ onNavigateView }: { onNavigateView: (view: View) => void }) {
-  const fuentesResumen: { label: string; detalle: string; icon: typeof Database; view: View; badge?: string }[] = [
-    { label: 'ComprasMX', detalle: `${fuentes.totalProcesosUnicos} procesos únicos`, icon: FileStack, view: 'licitaciones' },
-    { label: 'Excel de Gantt', detalle: `${carga.reduce((s, c) => s + c.asignaciones, 0)} tareas · ${carga.length} responsables`, icon: Users, view: 'licitaciones' },
-    { label: 'Excel de Ofertas', detalle: `${oferta.monto} en seguimiento`, icon: TrendingUp, view: 'ofertas' },
-    { label: 'Tablero de Proyectos', detalle: `${proyectos.length} proyectos adjudicados`, icon: Building2, view: 'finanzas', badge: 'concepto' },
-  ];
-  return <section className="fuentes-resumen" aria-label="Fuentes conectadas al corte">
-    <span className="fuentes-resumen-label"><GitMerge />{fuentesResumen.length} fuentes cruzándose en este corte</span>
-    <div className="fuentes-resumen-list">
-      {fuentesResumen.map((f) => <button key={f.label} className="fuentes-resumen-item" aria-label={`Abrir fuente ${f.label}`} onClick={() => onNavigateView(f.view)}>
-        <f.icon />
-        <div><strong>{f.label}{f.badge && <span className="concept-badge-inline">{f.badge}</span>}</strong><span>{f.detalle}</span></div>
-      </button>)}
-    </div>
-  </section>;
-}
-
-const _riesgoNivelLabel = { alto: 'Riesgo alto', medio: 'Riesgo medio', bajo: 'Riesgo bajo' };
-
-// El insight insignia del cruce (docs/ejemplo-ilustrativo-cruce.md §3.6), promovido del
-// módulo Cruce al resumen ejecutivo: la pregunta "¿qué proyecto necesita atención esta
-// semana?" combinando desfase avance/facturación + margen de fianza + carga de equipo.
-function _RiesgoPortafolioResumen({ onNavigateView }: { onNavigateView: (view: View) => void }) {
-  const ranking = _riesgoPortafolio();
-  const top = ranking.slice(0, 3);
-  return <section className="riesgo-portafolio" aria-label="Riesgo de portafolio, cruzando licitaciones y proyectos adjudicados">
-    <Card className="executive-card">
-      <CardHeader>
-        <div><CardTitle>¿Qué proyecto adjudicado necesita atención esta semana?</CardTitle><p>Cruce: avance vs. facturación (Finanzas) + fianzas vs. fallo (ComprasMX) + carga de equipo (Excel de Gantt)</p></div>
-        <span className="concept-badge"><FlaskConical />Datos ilustrativos</span>
-      </CardHeader>
-      <CardContent>
-        <div className="riesgo-portafolio-list">
-          {top.map(({ proyecto, nivel, razones }) => {
-            const match = matchResultPorProyecto(proyecto.id);
-            const licitacion = match?.licitacionId ? licitacionPorId(match.licitacionId) : undefined;
-            return <button key={proyecto.id} className="riesgo-portafolio-row" onClick={() => onNavigateView('finanzas')}>
-              <span className={`riesgo-pill riesgo-${nivel}`}>{_riesgoNivelLabel[nivel]}</span>
-              <div className="riesgo-portafolio-copy">
-                <strong>{proyecto.name}</strong>
-                <span>{razones.length > 0 ? razones.join(' · ') : 'Sin señales de riesgo en este corte.'}</span>
-                {licitacion && <small>Origen: {licitacion.numero} — {licitacion.dependencia}</small>}
-              </div>
-              <ChevronRight className="riesgo-portafolio-arrow" />
-            </button>;
-          })}
-        </div>
-        <button className="riesgo-portafolio-footer" onClick={() => onNavigateView('finanzas')}>
-          Ver el cruce completo de {proyectos.length} proyectos <ArrowRight />
-        </button>
-      </CardContent>
-    </Card>
-  </section>;
-}
-
-// Lectura editorial prototipo: el contenido está hardcodeado a partir del corte real.
-// Cuando exista el servicio de IA, esta superficie puede conservarse y sustituir solo la narrativa.
-function _AiExecutiveInsights({ onDetail }: { onDetail: (item: Licitacion) => void }) {
-  const alerta = licitacionPorId('XLS-SIOPESMA0BLP05692026');
-  return <section className="ai-insights" aria-labelledby="ai-insights-title">
-    <div className="ai-briefing">
-      <div className="ai-briefing-heading">
-        <div className="briefing-meta"><span>Nota de licitaciones</span><time>{fuentes.corte}</time></div>
-        <h3 id="ai-insights-title">Puerto Vallarta vence el 17 de septiembre.</h3>
-      </div>
-      <p>El expediente registra <strong>ocho tareas sin iniciar</strong>. Confirma responsables y vigencia del calendario antes de reasignar trabajo.</p>
-      <div className="ai-briefing-footer"><span><Database /> ComprasMX · corte {fuentes.corte}</span><button onClick={() => onDetail(alerta)}>Abrir expediente <ChevronRight /></button></div>
-    </div>
-    <div className="insight-stack" aria-label="Datos clave del corte">
-      <h4 className="insight-stack-heading">Datos para revisar</h4>
-      <div className="insight-ledger">
-        <article className="insight-record critical"><span>Avance</span><div><strong>8 tareas sin iniciar</strong><p>Puerto Vallarta · fallo 17 sep · confirma responsables.</p></div></article>
-        <article className="insight-record"><span>Concentración</span><div><strong>33 procesos · CDMX y Jalisco</strong><p>52% de los 64 procesos únicos del corte.</p></div></article>
-        <article className="insight-record"><span>Etapa principal</span><div><strong>40 registros · Construcción</strong><p>49% de los registros de origen; algunos pueden aparecer en más de una lista.</p></div></article>
-        <article className="insight-record"><span>Carga por revisar</span><div><strong>44 tareas con avance menor a 45%</strong><p>Alicia, Jemo y Javier/Brenda concentran esa carga.</p></div></article>
-      </div>
-    </div>
-  </section>;
-}
-
-// --- Pieza 6: embudo del corte actual (recibidos → únicos → en trabajo). El histórico de 60 cortes
-// se muestra aparte, solo como referencia de escala: no es la misma unidad de medida que el corte de hoy,
-// así que nunca se dividen entre sí (eso daba un falso "0.28% de conversión").
-function _HistoricoAnalisis() {
-  const enTrabajo = stages.find((s) => s.label === 'En trabajo')?.value ?? 0;
-  const conversionPct = ((enTrabajo / fuentes.totalProcesosUnicos) * 100).toFixed(1);
-  return <section className="historico-analisis" aria-label="Análisis del corte">
-    <Card className="executive-card">
-      <CardHeader><div><CardTitle>Embudo del corte</CardTitle><p>De registro recibido a trabajo activo, en el corte de hoy</p></div><span className="history-source"><Database />{fuentes.corte}</span></CardHeader>
-      <CardContent>
-        <div className="history-layout">
-          <div className="history-result"><span>EN TRABAJO ACTIVO</span><strong>{conversionPct}%</strong><small>de los procesos únicos del corte</small></div>
-          <div className="funnel-row">
-            <div className="funnel-step"><strong>{fuentes.totalRegistrosRecibidos}</strong><span>registros recibidos</span></div>
-            <ChevronRight className="funnel-sep" />
-            <div className="funnel-step"><strong>{fuentes.totalProcesosUnicos}</strong><span>procesos únicos</span></div>
-            <ChevronRight className="funnel-sep" />
-            <div className="funnel-step featured"><strong>{enTrabajo}</strong><span>en trabajo activo</span></div>
-          </div>
-        </div>
-        <p className="portfolio-note-inline"><Database />{enTrabajo} en trabajo ÷ {fuentes.totalProcesosUnicos} procesos únicos · fuente: corte actual. Cálculo determinístico.</p>
-        <p className="portfolio-note-inline history-scale-note"><Database />Para referencia de escala: {historicoResumen.totalExpedientes.toLocaleString('es-MX')} expedientes acumulados en los últimos {historicoResumen.totalSnapshots} cortes.</p>
-      </CardContent>
-    </Card>
-  </section>;
-}
-
-// --- Pieza 3: Capacidad vs. Demanda con acción y aprobación. ---
-function _CapacidadVsDemanda({ onDetail }: { onDetail: (item: Licitacion) => void }) {
-  const { sobrecargada, destino, tareaAMover } = capacidadCaso;
-  return <section className="capacidad-demanda" aria-label="Capacidad versus demanda">
-    <Card className="executive-card capacidad-card">
-      <CardHeader><div><CardTitle>Capacidad vs. Demanda</CardTitle><p>Cruce: tareas abiertas en Gantt × fecha de fallo por expediente. Fuentes: Excel de Gantt + ComprasMX</p></div><AlertTriangle className="capacidad-alert-icon" /></CardHeader>
-      <CardContent>
-        <div className="capacidad-evidencia">
-          <div className="capacidad-persona overloaded">
-            <span className="capacidad-persona-label">SOBRECARGADA</span>
-            <strong>{sobrecargada.nombre}</strong>
-            <span className="capacidad-persona-stat">{sobrecargada.carga.asignaciones} tareas asignadas en total · {sobrecargada.expedientes.length} expedientes con fallo próximo</span>
-            <div className="capacidad-expedientes">
-              {sobrecargada.expedientes.map(({ item, tareas }) => <button className="capacidad-expediente" key={item.id} onClick={() => onDetail(item)}>
-                <span className="capacidad-expediente-dep">{item.dependencia}</span>
-                <strong>{item.nombre}</strong>
-                <span className="capacidad-expediente-detalle">{tareas.length} tarea{tareas.length === 1 ? '' : 's'} abierta{tareas.length === 1 ? '' : 's'} · fallo {item.fallo ?? 'sin fecha'}</span>
-              </button>)}
-            </div>
-          </div>
-          <div className="capacidad-arrow" aria-hidden="true"><ArrowRight /></div>
-          <div className="capacidad-persona available">
-            <span className="capacidad-persona-label">CON CAPACIDAD</span>
-            <strong>{destino.nombre}</strong>
-            <span className="capacidad-persona-stat">{destino.carga.asignaciones} tareas asignadas en total · sin fecha de fallo próxima</span>
-            <div className="capacidad-expedientes">
-              <button className="capacidad-expediente" onClick={() => onDetail(destino.expediente.item)}>
-                <span className="capacidad-expediente-dep">{destino.expediente.item.dependencia}</span>
-                <strong>{destino.expediente.item.nombre}</strong>
-                <span className="capacidad-expediente-detalle">{destino.expediente.tareas.length} tarea{destino.expediente.tareas.length === 1 ? '' : 's'} abierta{destino.expediente.tareas.length === 1 ? '' : 's'} · {luisAbiertas82kmAvance}% avance promedio · sin fecha de fallo</span>
-              </button>
-            </div>
-          </div>
-        </div>
-        <div className="capacidad-propuesta">
-          <div className="capacidad-propuesta-copy">
-            <p className="section-kicker">PROPUESTA DE REASIGNACIÓN</p>
-            <strong className="capacidad-propuesta-title">Reasignar una tarea económica de {sobrecargada.nombre} a {destino.nombre}</strong>
-            <p>Mover <strong>&quot;{tareaAMover.nombre}&quot;</strong> del expediente <strong>{tramoIIICapacidad.numero}</strong>, con fallo el {tramoIIICapacidad.fallo}. {destino.nombre} registra {luisAbiertas82kmAvance}% de avance promedio en sus {luisAbiertas82km.length} tareas abiertas del expediente 82km, sin fecha de fallo registrada.</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  </section>;
 }
 
 // Insights del directorio completo — fijos sobre el corte, no cambian con los filtros de la tabla.

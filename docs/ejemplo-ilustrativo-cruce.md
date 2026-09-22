@@ -47,10 +47,32 @@ correctamente con 62.5% — por debajo del umbral. Ambos casos están en
 [`scripts/verify-matching-engine.mjs`](../scripts/verify-matching-engine.mjs),
 ejecutable con `node scripts/verify-matching-engine.mjs`.
 
-La vista **Cruce** del dashboard muestra el motor corriendo en vivo sobre
-los 6 proyectos ilustrativos de este documento: cada fila es expandible y
-muestra el desglose de las 4 señales, con el mismo vocabulario visual
-(anillo de score, semáforo de 3 bandas) que ya usan Finanzas y Obra.
+El resumen ejecutivo ("Decisiones de la semana") muestra el motor corriendo
+en vivo: el hallazgo de mayor riesgo del portafolio ilustrativo aparece como
+una fila más entre las alertas del corte, con su evidencia y, cuando aplica,
+el aviso "sin expediente vinculado automáticamente".
+
+### 0.1 `numeroProcedimiento` se quitó de los proyectos ilustrativos a propósito
+
+La primera versión de este ejercicio poblaba `numeroProcedimiento` en los 6
+proyectos ilustrativos con el número real del expediente correspondiente —
+eso hacía que la señal de mayor peso (55%) fuera, en la práctica, el mismo
+ID compartido que el motor dice no necesitar. Se verificó contra el bundle
+real de `proyectos-semanal-demo` (sin acceso a fuente, solo assets
+compilados) que ese campo **no existe hoy** en el Tablero de Proyectos del
+cliente. Por eso se quitó (queda comentado, no borrado, para no perder la
+trazabilidad a qué expediente real corresponde cada proyecto) y el motor
+ahora cruza solo con nombre + dependencia + fecha — las señales que el
+cliente sí tiene hoy.
+
+Resultado con el motor real, sin ese campo: **4 de 6 proyectos vinculan
+automáticamente** (88-100% de confianza), y **2 quedan por debajo del
+umbral** (79.4% y 83.4%) — incluido "Control de Calidad de la Obra —
+Mejoramiento Etapa 2" (ASIPONAGUAYMAS), que es justo el caso con la fianza
+más urgente del portafolio. Ese caso límite ahora se muestra explícitamente
+en la UI como "sin vincular, revisar a mano" en vez de forzarse — es la
+prueba en vivo de que el motor no adivina, no solo una afirmación en este
+documento.
 
 ## 1. Los seis expedientes usados
 

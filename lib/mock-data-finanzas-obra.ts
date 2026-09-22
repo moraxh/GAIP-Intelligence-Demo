@@ -50,7 +50,11 @@ export type WeeklyGoalIlustrativo = { id: string; proyectoId: string; weekStart:
 export const proyectos: ProyectoIlustrativo[] = [
   {
     id: 'proj-puente-xuchipantla',
-    numeroProcedimiento: 'LO-09-210-009000999-N-925-2026', // real: expediente E-2026-00099528, estado 'Construcción', sin fallo (ya adjudicado antes del corte)
+    // numeroProcedimiento: 'LO-09-210-009000999-N-925-2026' — real: expediente E-2026-00099528, estado
+    // 'Construcción', sin fallo (ya adjudicado antes del corte). Se deja comentado a propósito: el
+    // Tablero de Proyectos real del cliente NO captura este campo hoy (verificado contra
+    // proyectos-semanal-demo, sin bundle). El motor debe cruzar con lo que el cliente sí tiene:
+    // nombre, dependencia y fecha. Ver docs/mapeo-cruce-licitaciones-proyectos.md.
     name: 'Reconstrucción del Puente "Xuchipantla"',
     client: 'SICT',
     status: 'activo',
@@ -62,7 +66,7 @@ export const proyectos: ProyectoIlustrativo[] = [
   },
   {
     id: 'proj-asiponaguaymas',
-    numeroProcedimiento: 'LO-13-J2Z-013J2Z999-N-15-2026', // real: expediente E-2026-00093484, estado 'Fallo', fallo 11 sep 2026
+    // numeroProcedimiento: 'LO-13-J2Z-013J2Z999-N-15-2026' — real: expediente E-2026-00093484, fallo 11 sep 2026.
     name: 'Control de Calidad de la Obra — Mejoramiento Etapa 2',
     client: 'ASIPONAGUAYMAS',
     status: 'en_riesgo',
@@ -74,7 +78,7 @@ export const proyectos: ProyectoIlustrativo[] = [
   },
   {
     id: 'proj-puente-las-pilas',
-    numeroProcedimiento: 'LO-09-210-009000999-N-924-2026', // real: expediente E-2026-00099527, estado 'Construcción'
+    // numeroProcedimiento: 'LO-09-210-009000999-N-924-2026' — real: expediente E-2026-00099527, estado 'Construcción'.
     name: 'Construcción del Puente "Las Pilas"',
     client: 'SICT',
     status: 'activo',
@@ -86,7 +90,7 @@ export const proyectos: ProyectoIlustrativo[] = [
   },
   {
     id: 'proj-tramo-8-golfo',
-    numeroProcedimiento: 'LA-06-G1C-006G1C003-N-36-2026', // real: expediente E-2026-00091321, estado 'Construcción', BANOBRAS
+    // numeroProcedimiento: 'LA-06-G1C-006G1C003-N-36-2026' — real: expediente E-2026-00091321, BANOBRAS.
     name: 'Supervisión Tramo 8 — Corredor Golfo México',
     client: 'BANOBRAS',
     status: 'activo',
@@ -98,7 +102,7 @@ export const proyectos: ProyectoIlustrativo[] = [
   },
   {
     id: 'proj-tramo-i-ferroviario',
-    numeroProcedimiento: 'LO-09-JZO-009JZO001-I-26-2026', // real: expediente E-2026-00076620, estado 'Construcción', ATTRAPI
+    // numeroProcedimiento: 'LO-09-JZO-009JZO001-I-26-2026' — real: expediente E-2026-00076620, ATTRAPI.
     name: 'Construcción y Diseño 68 km — Tramo I Ferroviario',
     client: 'ATTRAPI',
     status: 'activo',
@@ -110,7 +114,7 @@ export const proyectos: ProyectoIlustrativo[] = [
   },
   {
     id: 'proj-agua-potable-xicotepec',
-    numeroProcedimiento: 'LO-16-B00-016B00985-N-167-2026', // real: expediente E-2026-00098796, estado 'Construcción', CONAGUA
+    // numeroProcedimiento: 'LO-16-B00-016B00985-N-167-2026' — real: expediente E-2026-00098796, CONAGUA.
     name: 'Reconstrucción Sistema de Agua Potable — Xicotepec, Puebla',
     client: 'CONAGUA',
     status: 'activo',
@@ -316,20 +320,20 @@ export function riesgoPortafolio(): RiesgoPortafolio[] {
   }).sort((a, b) => b.puntos - a.puntos);
 }
 
-// Guarda contra que el motor de cruce (lib/matching-engine.ts) deje de encontrar alguna
-// de las 6 vinculaciones esperadas — p.ej. si lib/mock-data.ts se regenera y cambia el
-// numero/nombre/dependencia del expediente correspondiente. Ya no valida un FK estático:
-// corre el algoritmo real y falla fuerte en dev si el score cae por debajo del umbral
-// para cualquiera de estos proyectos, igual de estricto que el guard anterior pero
-// validando el algoritmo en vez de un id hardcodeado.
+// Guarda contra una regresión real del motor de cruce (lib/matching-engine.ts), no contra
+// que algún proyecto quede sin vincular — eso es esperado y correcto: el Tablero de
+// Proyectos real del cliente no captura numeroProcedimiento hoy (ver comentarios arriba),
+// así que el motor cruza solo con nombre+dependencia+fecha, señales más débiles que no
+// siempre superan el umbral de 85%. Si algún día TODOS los proyectos dejaran de vincular,
+// algo real se rompió (p.ej. lib/mock-data.ts cambió nombre/dependencia de los 6
+// expedientes esperados) — eso sí debe fallar fuerte en dev.
 if (process.env.NODE_ENV !== 'production') {
-  for (const r of matchResults) {
-    if (!r.autoLinked) {
-      throw new Error(
-        `mock-data-finanzas-obra: el motor de cruce ya no vincula automáticamente el proyecto "${r.proyectoId}" ` +
-        `(mejor score encontrado: ${r.bestRejectedCandidate?.score.toFixed(3) ?? 'ninguno'}). ` +
-        'Revisa si lib/mock-data.ts cambió el numero/nombre/dependencia del expediente esperado, o el numeroProcedimiento en este archivo.',
-      );
-    }
+  const vinculados = matchResults.filter((r) => r.autoLinked).length;
+  if (vinculados === 0) {
+    throw new Error(
+      'mock-data-finanzas-obra: el motor de cruce dejó de vincular automáticamente TODOS los proyectos ' +
+      '(antes vinculaba al menos algunos). Revisa si lib/mock-data.ts cambió nombre/dependencia/fallo de los ' +
+      'expedientes reales referenciados en proyectos.',
+    );
   }
 }
