@@ -365,7 +365,7 @@ function InvoiceDialog({ open, isNew, draft, setDraft, proyectos, onSave, onCanc
           <div className="crud-dialog-field">
             <label htmlFor="invoice-status">Estado</label>
             <Select value={draft.status} onValueChange={(value) => setDraft({ ...draft, status: value as InvoiceStatus })}>
-              <SelectTrigger id="invoice-status" className="crud-dialog-select-trigger"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="invoice-status" className="crud-dialog-select-trigger"><SelectValue>{(value: InvoiceStatus) => invoiceStatusLabel[value]}</SelectValue></SelectTrigger>
               <SelectContent>{(Object.keys(invoiceStatusLabel) as InvoiceStatus[]).map((s) => <SelectItem value={s} key={s}>{invoiceStatusLabel[s]}</SelectItem>)}</SelectContent>
             </Select>
           </div>
@@ -398,7 +398,7 @@ function ProyectoDialog({ open, isNew, draft, setDraft, onSave, onCancel }: {
           <div className="crud-dialog-field">
             <label htmlFor="proyecto-status">Estatus</label>
             <Select value={draft.status} onValueChange={(value) => setDraft({ ...draft, status: value as ProjectStatus })}>
-              <SelectTrigger id="proyecto-status" className="crud-dialog-select-trigger"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="proyecto-status" className="crud-dialog-select-trigger"><SelectValue>{(value: ProjectStatus) => projectStatusLabel[value]}</SelectValue></SelectTrigger>
               <SelectContent>{(Object.keys(projectStatusLabel) as ProjectStatus[]).map((s) => <SelectItem value={s} key={s}>{projectStatusLabel[s]}</SelectItem>)}</SelectContent>
             </Select>
           </div>

@@ -1509,16 +1509,22 @@ button:focus-visible,a:focus-visible,input:focus-visible,[role="button"]:focus-v
 .select-content-wide [data-slot="select-item"]>div:first-child{display:block!important;flex:1 1 auto!important;min-width:0!important;max-width:100%!important;overflow:hidden!important;white-space:nowrap!important;text-overflow:ellipsis!important}
 
 /* --- Modales de CRUD (facturas, pagos, proyectos, fianzas, objetivos) --- */
-.crud-dialog{width:480px!important;max-width:92vw!important}
-.crud-dialog-wide{width:620px!important}
-.crud-dialog [data-slot="dialog-title"]{font-size:1rem;color:#192c31}
-.crud-dialog [data-slot="dialog-description"]{font-size:.78rem;color:#7b8d96}
-.crud-dialog-form{display:flex;flex-direction:column;gap:14px;margin-top:6px}
-.crud-dialog-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
-.crud-dialog-field{display:flex;flex-direction:column;gap:5px;min-width:0}
-.crud-dialog-field label{font-size:.68rem;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:#58707d}
-.crud-dialog-select-trigger{width:100%!important}
-.crud-dialog [data-slot="dialog-footer"]{margin-top:4px}
+.crud-dialog{width:480px!important;max-width:92vw!important;padding:24px!important;border-radius:16px!important;box-shadow:0 24px 60px rgba(17,32,44,.18),0 2px 8px rgba(17,32,44,.06)!important}
+.crud-dialog-wide{width:640px!important}
+.crud-dialog [data-slot="dialog-header"]{gap:4px}
+.crud-dialog [data-slot="dialog-title"]{font-size:1.05rem;font-weight:600;color:#151f26}
+.crud-dialog [data-slot="dialog-description"]{font-size:.8rem;color:#7b8d96;line-height:1.4}
+.crud-dialog [data-slot="dialog-close"]{top:20px;right:20px;color:#8697a0}
+.crud-dialog [data-slot="dialog-close"]:hover{background:#f1f4f7;color:#192c31}
+.crud-dialog-form{display:flex;flex-direction:column;gap:16px;margin-top:10px}
+.crud-dialog-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+.crud-dialog-field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.crud-dialog-field label{font-size:.66rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#7c8e97}
+.crud-dialog-field input,.crud-dialog-select-trigger{height:38px!important;border-radius:9px!important;border-color:#d5dee5!important;font-size:.85rem!important}
+.crud-dialog-field input:focus-visible,.crud-dialog-select-trigger:focus-visible{border-color:#0171bb!important}
+.crud-dialog-select-trigger{width:100%!important;justify-content:space-between!important}
+.crud-dialog [data-slot="dialog-footer"]{margin:8px -24px -24px;padding:16px 24px;border-radius:0 0 16px 16px;border-top:1px solid #eef1f3;background:#fafbfc}
+.crud-dialog [data-slot="dialog-footer"] button{min-width:96px}
 .finance-progress-cell{display:flex;align-items:center;gap:8px;min-width:84px}
 .finance-progress-cell>strong{color:#2b4351;font-size:.68rem;font-variant-numeric:tabular-nums}
 .finance-mini-track{width:48px;height:6px;border-radius:999px;background:#e4edf1;overflow:hidden}

@@ -398,7 +398,7 @@ function BondDialog({ open, isNew, draft, setDraft, proyectos, onSave, onCancel 
           <div className="crud-dialog-field">
             <label htmlFor="bond-type">Tipo</label>
             <Select value={draft.type} onValueChange={(value) => setDraft({ ...draft, type: value as BondType })}>
-              <SelectTrigger id="bond-type" className="crud-dialog-select-trigger"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="bond-type" className="crud-dialog-select-trigger"><SelectValue>{(value: BondType) => bondTypeLabel[value]}</SelectValue></SelectTrigger>
               <SelectContent>{(Object.keys(bondTypeLabel) as BondType[]).map((t) => <SelectItem value={t} key={t}>{bondTypeLabel[t]}</SelectItem>)}</SelectContent>
             </Select>
           </div>
@@ -412,7 +412,7 @@ function BondDialog({ open, isNew, draft, setDraft, proyectos, onSave, onCancel 
           <div className="crud-dialog-field">
             <label htmlFor="bond-status">Estatus</label>
             <Select value={draft.status} onValueChange={(value) => setDraft({ ...draft, status: value as BondStatus })}>
-              <SelectTrigger id="bond-status" className="crud-dialog-select-trigger"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="bond-status" className="crud-dialog-select-trigger"><SelectValue>{(value: BondStatus) => bondStatusLabel[value]}</SelectValue></SelectTrigger>
               <SelectContent>{bondStatusOptions.map((s) => <SelectItem value={s} key={s}>{bondStatusLabel[s]}</SelectItem>)}</SelectContent>
             </Select>
           </div>
