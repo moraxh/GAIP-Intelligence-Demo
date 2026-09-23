@@ -402,9 +402,9 @@ function Dashboard({ onAll, onHitos, onDetail, onNavigateView }: { onAll: () => 
   const cobranza = cobranzaConsolidada(portfolio.proyectos, portfolio.invoices, portfolio.payments, portfolio.addendas);
   const bondsPorVencerLive = bondsPorVencerDe(portfolio.bonds);
   const executionRows = portfolio.proyectos.map((proyecto) => {
-    const total = montoTotal(proyecto.id, portfolio.addendas);
+    const total = montoTotal(proyecto.id, portfolio.addendas, portfolio.proyectos);
     const facturado = totalFacturado(proyecto.id, portfolio.invoices);
-    const { desfase, nivel } = semaforoDesfase(proyecto.id, portfolio.invoices, portfolio.addendas);
+    const { desfase, nivel } = semaforoDesfase(proyecto.id, portfolio.invoices, portfolio.addendas, portfolio.proyectos);
     return { proyecto, facturadoPct: total > 0 ? Math.round((facturado / total) * 100) : 0, desfase, nivel };
   }).sort((a, b) => b.desfase - a.desfase).slice(0, 3);
   const fianzasProximas = bondsPorVencerLive.slice(0, 2).map((fianza) => {

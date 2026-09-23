@@ -1467,6 +1467,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,[role="button"]:focus-v
 .finance-risk-footnote svg{width:13px;height:13px;flex:none;color:#7b95a4}
 .finance-portfolio-card{overflow:hidden}
 .finance-portfolio-card [data-slot=card-header]{align-items:center}
+.finance-portfolio-header-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .finance-filter-tabs{display:flex;align-items:center;gap:4px;min-width:0;margin:0;padding:3px;border:1px solid #d8e1e7;border-radius:8px;background:#f5f8fa}
 .finance-filter-tabs legend{padding:0}
 .finance-filter-tabs button{padding:5px 8px;border:0;border-radius:5px;background:transparent;color:#607582;font-size:.66rem;cursor:pointer;white-space:nowrap}

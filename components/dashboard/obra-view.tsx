@@ -108,11 +108,11 @@ export function ObraView() {
   const filas = useMemo(() => proyectos.map((proyecto) => {
     const match = matchResultPorProyecto(proyecto.id);
     const licitacion = match?.licitacionId ? licitacionPorId(match.licitacionId) : undefined;
-    const total = montoTotal(proyecto.id, portfolio.addendas);
+    const total = montoTotal(proyecto.id, portfolio.addendas, proyectos);
     const facturado = totalFacturado(proyecto.id, portfolio.invoices);
     const pagado = totalPagado(proyecto.id, portfolio.payments);
     const gantt = avanceGantt(match?.licitacionId);
-    const { desfase, nivel } = semaforoDesfase(proyecto.id, portfolio.invoices, portfolio.addendas);
+    const { desfase, nivel } = semaforoDesfase(proyecto.id, portfolio.invoices, portfolio.addendas, proyectos);
     const fianza = bonds.find((bond) => bond.proyectoId === proyecto.id);
     const tareasAbiertas = licitacion?.tareas?.filter((tarea) => tarea.avance < 100) ?? [];
 

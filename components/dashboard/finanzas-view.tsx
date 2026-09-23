@@ -15,6 +15,7 @@ import {
   bondsPorVencerDe, cobranzaConsolidada, diasEntreFallo, diasParaVencer,
   proyectoPorId, riesgoPortafolio, totalFacturado, totalPagado,
   montoTotal, matchResultPorProyecto, type BondStatus, type RiesgoNivel, type InvoiceStatus, type InvoiceIlustrativa, type PaymentIlustrativo,
+  type ProjectStatus, type ProyectoIlustrativo,
 } from '@/lib/mock-data-finanzas-obra';
 import { fmtMXN as fmt, licitacionPorId } from '@/lib/mock-data-helpers';
 import { usePortfolio } from '@/lib/portfolio-store';
@@ -38,6 +39,14 @@ const invoiceStatusLabel = {
   pagado: 'Pagada',
 } as const;
 
+const projectStatusLabel: Record<ProjectStatus, string> = {
+  activo: 'Activo',
+  en_pausa: 'En pausa',
+  en_riesgo: 'En riesgo',
+  terminado: 'Terminado',
+  cancelado: 'Cancelado',
+};
+
 function percentage(value: number, total: number) {
   return total > 0 ? Math.round((value / total) * 100) : 0;
 }
@@ -53,6 +62,17 @@ function paymentToDraft(p: PaymentIlustrativo): PaymentDraft {
   return { proyectoId: p.proyectoId, amount: String(p.amount), paymentDate: p.paymentDate };
 }
 
+type ProyectoDraft = {
+  name: string; client: string; status: ProjectStatus; progress: string; coordinator: string;
+  contractAmount: string; contractStart: string; contractEnd: string;
+};
+function proyectoToDraft(p: ProyectoIlustrativo): ProyectoDraft {
+  return {
+    name: p.name, client: p.client, status: p.status, progress: String(p.progress), coordinator: p.coordinator,
+    contractAmount: String(p.contractAmount), contractStart: p.contractStart, contractEnd: p.contractEnd,
+  };
+}
+
 export function FinanzasView() {
   const portfolio = usePortfolio();
   const { proyectos, invoices, payments, addendas } = portfolio;
@@ -62,7 +82,7 @@ export function FinanzasView() {
   const risks = useMemo(() => riesgoPortafolio(proyectos, invoices, portfolio.bonds, addendas), [proyectos, invoices, portfolio.bonds, addendas]);
 
   const projectRows = useMemo(() => proyectos.map((proyecto) => {
-    const total = montoTotal(proyecto.id, addendas);
+    const total = montoTotal(proyecto.id, addendas, proyectos);
     const facturado = totalFacturado(proyecto.id, invoices);
     const pagado = totalPagado(proyecto.id, payments);
     const pctFacturado = percentage(facturado, total);
@@ -125,6 +145,33 @@ export function FinanzasView() {
     setPaymentEditingId(null);
   };
 
+  const emptyProyectoDraft: ProyectoDraft = { name: '', client: '', status: 'activo', progress: '0', coordinator: 'Sin asignar', contractAmount: '', contractStart: '', contractEnd: '' };
+  const [proyectoEditingId, setProyectoEditingId] = useState<EditingId>(null);
+  const [proyectoDraft, setProyectoDraft] = useState<ProyectoDraft>(emptyProyectoDraft);
+
+  const startNewProyecto = () => { setProyectoDraft(emptyProyectoDraft); setProyectoEditingId({ kind: 'new' }); };
+  const startEditProyecto = (p: ProyectoIlustrativo) => { setProyectoDraft(proyectoToDraft(p)); setProyectoEditingId({ kind: 'existing', id: p.id }); };
+  const cancelProyectoEdit = () => setProyectoEditingId(null);
+  const saveProyecto = () => {
+    const progress = Number(proyectoDraft.progress);
+    const contractAmount = Number(proyectoDraft.contractAmount);
+    if (!proyectoDraft.name || !proyectoDraft.client || !proyectoDraft.contractStart || !proyectoDraft.contractEnd
+      || !Number.isFinite(progress) || !Number.isFinite(contractAmount) || contractAmount <= 0) return;
+    const payload = {
+      name: proyectoDraft.name, client: proyectoDraft.client, status: proyectoDraft.status,
+      progress: Math.max(0, Math.min(100, progress)), coordinator: proyectoDraft.coordinator || 'Sin asignar',
+      contractAmount, contractStart: proyectoDraft.contractStart, contractEnd: proyectoDraft.contractEnd,
+    };
+    if (proyectoEditingId?.kind === 'new') portfolio.addProyecto(payload);
+    else if (proyectoEditingId?.kind === 'existing') portfolio.updateProyecto(proyectoEditingId.id, payload);
+    setProyectoEditingId(null);
+  };
+  const removeProyecto = (p: ProyectoIlustrativo) => {
+    if (window.confirm(`¿Eliminar "${p.name}"? También se eliminan sus facturas, pagos, fianzas y objetivos asociados.`)) {
+      portfolio.removeProyecto(p.id);
+    }
+  };
+
   return <div className="concept-view finance-view">
     <div className="concept-page-heading finanzas-page-heading">
       <div>
@@ -178,7 +225,7 @@ export function FinanzasView() {
         <CardHeader><div><CardTitle>Fianzas por vencer</CardTitle><p>Ordenadas por cercanía al vencimiento</p></div><Badge className="finance-count-badge" variant="outline">{bondsPorVencer.length} pendientes</Badge></CardHeader>
         <CardContent className="finance-bond-list">
           {bondsPorVencer.map((bond) => {
-            const proyecto = proyectoPorId(bond.proyectoId);
+            const proyecto = proyectoPorId(bond.proyectoId, proyectos);
             const match = matchResultPorProyecto(bond.proyectoId);
             const licitacion = match?.licitacionId ? licitacionPorId(match.licitacionId) : undefined;
             const dias = diasEntreFallo(bond, licitacion?.fallo);
@@ -207,17 +254,23 @@ export function FinanzasView() {
     <Card className="executive-card finance-portfolio-card">
       <CardHeader>
         <div><CardTitle>Portafolio por proyecto</CardTitle><p>La vista que faltaba para explicar el total consolidado.</p></div>
-        <fieldset className="finance-filter-tabs">
-          <legend className="sr-only">Filtrar portafolio</legend>
-          <button type="button" className={portfolioFilter === 'todos' ? 'is-active' : ''} aria-pressed={portfolioFilter === 'todos'} onClick={() => setPortfolioFilter('todos')}>Todos <span>{projectRows.length}</span></button>
-          <button type="button" className={portfolioFilter === 'atencion' ? 'is-active' : ''} aria-pressed={portfolioFilter === 'atencion'} onClick={() => setPortfolioFilter('atencion')}>Requieren atención <span>{attentionCount}</span></button>
-        </fieldset>
+        <div className="finance-portfolio-header-actions">
+          <fieldset className="finance-filter-tabs">
+            <legend className="sr-only">Filtrar portafolio</legend>
+            <button type="button" className={portfolioFilter === 'todos' ? 'is-active' : ''} aria-pressed={portfolioFilter === 'todos'} onClick={() => setPortfolioFilter('todos')}>Todos <span>{projectRows.length}</span></button>
+            <button type="button" className={portfolioFilter === 'atencion' ? 'is-active' : ''} aria-pressed={portfolioFilter === 'atencion'} onClick={() => setPortfolioFilter('atencion')}>Requieren atención <span>{attentionCount}</span></button>
+          </fieldset>
+          <Button variant="outline" size="sm" onClick={startNewProyecto}><Plus />Agregar proyecto</Button>
+        </div>
       </CardHeader>
       <CardContent className="finance-table-content">
+        {proyectoEditingId?.kind === 'new' && <ProyectoForm draft={proyectoDraft} setDraft={setProyectoDraft} onSave={saveProyecto} onCancel={cancelProyectoEdit} />}
         <div className="finance-table-scroll">
           <Table className="finanzas-table finanzas-portfolio-table">
-            <TableHeader><TableRow><TableHead>Proyecto</TableHead><TableHead>Contrato</TableHead><TableHead>Facturado</TableHead><TableHead>Cobrado</TableHead><TableHead>Pendiente</TableHead><TableHead>Avance físico</TableHead><TableHead>Brecha</TableHead><TableHead>Riesgo</TableHead></TableRow></TableHeader>
-            <TableBody>{rowsToShow.map((row) => <TableRow key={row.proyecto.id}>
+            <TableHeader><TableRow><TableHead>Proyecto</TableHead><TableHead>Contrato</TableHead><TableHead>Facturado</TableHead><TableHead>Cobrado</TableHead><TableHead>Pendiente</TableHead><TableHead>Avance físico</TableHead><TableHead>Brecha</TableHead><TableHead>Riesgo</TableHead><TableHead aria-label="Acciones" /></TableRow></TableHeader>
+            <TableBody>{rowsToShow.map((row) => proyectoEditingId?.kind === 'existing' && proyectoEditingId.id === row.proyecto.id
+              ? <TableRow key={row.proyecto.id}><TableCell colSpan={9}><ProyectoForm draft={proyectoDraft} setDraft={setProyectoDraft} onSave={saveProyecto} onCancel={cancelProyectoEdit} /></TableCell></TableRow>
+              : <TableRow key={row.proyecto.id}>
               <TableCell><div className="finance-project-cell"><strong>{row.proyecto.name}</strong><span>{row.proyecto.client} · {row.proyecto.coordinator}</span></div></TableCell>
               <TableCell><strong>{fmt(row.total)}</strong><span className="finance-cell-sub">{row.porEjercer > 0 ? `${fmt(row.porEjercer)} por ejercer` : 'Contrato agotado'}</span></TableCell>
               <TableCell><strong>{fmt(row.facturado)}</strong><span className="finance-cell-sub">{row.pctFacturado}%</span></TableCell>
@@ -226,6 +279,10 @@ export function FinanzasView() {
               <TableCell><div className="finance-progress-cell"><div className="finance-mini-track"><i style={{ width: `${row.proyecto.progress}%` }} /></div><strong>{row.proyecto.progress}%</strong></div></TableCell>
               <TableCell><span className={`finance-delta finance-delta-${row.delta <= 10 ? 'ok' : row.delta <= 25 ? 'warning' : 'danger'}`}>{row.delta === 0 ? 'Alineado' : `${row.delta.toFixed(1)} pts`}</span><span className="finance-cell-sub">{row.delta === 0 ? 'avance y cobro' : row.balance > 0 ? 'obra adelante' : 'facturación adelante'}</span></TableCell>
               <TableCell><span className={`finance-risk-badge finance-risk-badge-${row.risk?.nivel ?? 'bajo'}`}>{riskLabel[row.risk?.nivel ?? 'bajo']}</span></TableCell>
+              <TableCell><div className="finance-row-actions">
+                <button type="button" aria-label={`Editar proyecto ${row.proyecto.name}`} onClick={() => startEditProyecto(row.proyecto)}><Pencil /></button>
+                <button type="button" aria-label={`Eliminar proyecto ${row.proyecto.name}`} onClick={() => removeProyecto(row.proyecto)}><Trash2 /></button>
+              </div></TableCell>
             </TableRow>)}</TableBody>
           </Table>
         </div>
@@ -246,7 +303,7 @@ export function FinanzasView() {
           <div className="finance-table-scroll"><Table className="finanzas-table finance-compact-table"><TableHeader><TableRow><TableHead>Proyecto</TableHead><TableHead>Folio</TableHead><TableHead>Monto</TableHead><TableHead>Estado</TableHead><TableHead>Emisión</TableHead><TableHead aria-label="Acciones" /></TableRow></TableHeader><TableBody>{invoices.map((inv) => invoiceEditingId?.kind === 'existing' && invoiceEditingId.id === inv.id
             ? <TableRow key={inv.id}><TableCell colSpan={6}><InvoiceForm draft={invoiceDraft} setDraft={setInvoiceDraft} proyectos={proyectos} onSave={saveInvoice} onCancel={cancelInvoiceEdit} /></TableCell></TableRow>
             : <TableRow key={inv.id}>
-              <TableCell>{proyectoPorId(inv.proyectoId).name}</TableCell>
+              <TableCell>{proyectoPorId(inv.proyectoId, proyectos).name}</TableCell>
               <TableCell>{inv.folio}</TableCell>
               <TableCell><strong>{fmt(inv.amount)}</strong></TableCell>
               <TableCell><Badge variant="outline" className={`finance-invoice-${inv.status}`}>{invoiceStatusLabel[inv.status]}</Badge></TableCell>
@@ -269,7 +326,7 @@ export function FinanzasView() {
           <div className="finance-table-scroll"><Table className="finanzas-table finance-compact-table"><TableHeader><TableRow><TableHead>Proyecto</TableHead><TableHead>Monto</TableHead><TableHead>Fecha de pago</TableHead><TableHead aria-label="Acciones" /></TableRow></TableHeader><TableBody>{payments.map((payment) => paymentEditingId?.kind === 'existing' && paymentEditingId.id === payment.id
             ? <TableRow key={payment.id}><TableCell colSpan={4}><PaymentForm draft={paymentDraft} setDraft={setPaymentDraft} proyectos={proyectos} onSave={savePayment} onCancel={cancelPaymentEdit} /></TableCell></TableRow>
             : <TableRow key={payment.id}>
-              <TableCell>{proyectoPorId(payment.proyectoId).name}</TableCell>
+              <TableCell>{proyectoPorId(payment.proyectoId, proyectos).name}</TableCell>
               <TableCell><strong>{fmt(payment.amount)}</strong></TableCell>
               <TableCell>{payment.paymentDate}</TableCell>
               <TableCell><div className="finance-row-actions">
@@ -305,6 +362,31 @@ function InvoiceForm({ draft, setDraft, proyectos, onSave, onCancel }: {
       </Select>
     </div>
     <div className="finance-crud-field"><label htmlFor="invoice-date">Emisión</label><Input id="invoice-date" value={draft.issueDate} onChange={(e) => setDraft({ ...draft, issueDate: e.target.value })} placeholder="10 sep 2026" /></div>
+    <div className="finance-crud-form-actions">
+      <Button type="submit" size="sm">Guardar</Button>
+      <Button type="button" variant="ghost" size="sm" onClick={onCancel}><X />Cancelar</Button>
+    </div>
+  </form>;
+}
+
+function ProyectoForm({ draft, setDraft, onSave, onCancel }: {
+  draft: ProyectoDraft; setDraft: (d: ProyectoDraft) => void; onSave: () => void; onCancel: () => void;
+}) {
+  return <form className="finance-crud-form" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
+    <div className="finance-crud-field"><label htmlFor="proyecto-name">Nombre</label><Input id="proyecto-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Nombre del proyecto" /></div>
+    <div className="finance-crud-field"><label htmlFor="proyecto-client">Cliente</label><Input id="proyecto-client" value={draft.client} onChange={(e) => setDraft({ ...draft, client: e.target.value })} placeholder="Dependencia" /></div>
+    <div className="finance-crud-field">
+      <label htmlFor="proyecto-status">Estatus</label>
+      <Select value={draft.status} onValueChange={(value) => setDraft({ ...draft, status: value as ProjectStatus })}>
+        <SelectTrigger id="proyecto-status"><SelectValue /></SelectTrigger>
+        <SelectContent>{(Object.keys(projectStatusLabel) as ProjectStatus[]).map((s) => <SelectItem value={s} key={s}>{projectStatusLabel[s]}</SelectItem>)}</SelectContent>
+      </Select>
+    </div>
+    <div className="finance-crud-field"><label htmlFor="proyecto-progress">Avance físico %</label><Input id="proyecto-progress" type="number" min="0" max="100" value={draft.progress} onChange={(e) => setDraft({ ...draft, progress: e.target.value })} /></div>
+    <div className="finance-crud-field"><label htmlFor="proyecto-coordinator">Coordinador</label><Input id="proyecto-coordinator" value={draft.coordinator} onChange={(e) => setDraft({ ...draft, coordinator: e.target.value })} placeholder="Sin asignar" /></div>
+    <div className="finance-crud-field"><label htmlFor="proyecto-amount">Monto contratado</label><Input id="proyecto-amount" type="number" min="0" value={draft.contractAmount} onChange={(e) => setDraft({ ...draft, contractAmount: e.target.value })} placeholder="0" /></div>
+    <div className="finance-crud-field"><label htmlFor="proyecto-start">Inicio de contrato</label><Input id="proyecto-start" value={draft.contractStart} onChange={(e) => setDraft({ ...draft, contractStart: e.target.value })} placeholder="10 sep 2026" /></div>
+    <div className="finance-crud-field"><label htmlFor="proyecto-end">Fin de contrato</label><Input id="proyecto-end" value={draft.contractEnd} onChange={(e) => setDraft({ ...draft, contractEnd: e.target.value })} placeholder="10 sep 2027" /></div>
     <div className="finance-crud-form-actions">
       <Button type="submit" size="sm">Guardar</Button>
       <Button type="button" variant="ghost" size="sm" onClick={onCancel}><X />Cancelar</Button>

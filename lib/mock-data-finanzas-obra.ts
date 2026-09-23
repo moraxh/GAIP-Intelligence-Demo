@@ -170,8 +170,10 @@ export const weeklyGoals: WeeklyGoalIlustrativo[] = [
 
 // --- Cálculos derivados (puros, sobre los datos ilustrativos de arriba) ---
 
-export function proyectoPorId(id: string): ProyectoIlustrativo {
-  const found = proyectos.find((p) => p.id === id);
+// proyectosSet opcional: igual que montoTotal/semaforoDesfase, permite resolver proyectos
+// agregados en el store editable de Finanzas (CRUD de proyectos), no solo los 6 base.
+export function proyectoPorId(id: string, proyectosSet: ProyectoIlustrativo[] = proyectos): ProyectoIlustrativo {
+  const found = proyectosSet.find((p) => p.id === id);
   if (!found) throw new Error(`Proyecto ilustrativo no encontrado: ${id}`);
   return found;
 }
@@ -193,10 +195,16 @@ export function matchResultPorLicitacion(licitacionId: string): MatchResult | un
   return matchResults.find((r) => r.autoLinked && r.licitacionId === licitacionId);
 }
 
-export function montoTotal(proyectoId: string, addendasSet: AddendaIlustrativa[] = addendas): number {
-  const contrato = proyectoPorId(proyectoId).contractAmount;
+// proyectosSet es opcional pero, a diferencia de invoicesSet/paymentsSet/addendasSet arriba,
+// SÍ importa pasarlo cuando el proyecto pudo haberse agregado en el store editable (CRUD de
+// proyectos en Finanzas): proyectoPorId solo busca en la constante estática de este archivo
+// y lanza si no lo encuentra, así que un proyecto "proj-manual-N" recién creado rompería
+// esta función si no se le pasa el set correcto.
+export function montoTotal(proyectoId: string, addendasSet: AddendaIlustrativa[] = addendas, proyectosSet: ProyectoIlustrativo[] = proyectos): number {
+  const proyecto = proyectosSet.find((p) => p.id === proyectoId);
+  if (!proyecto) return 0;
   const addendasMonto = addendasSet.filter((a) => a.proyectoId === proyectoId).reduce((sum, a) => sum + a.amount, 0);
-  return contrato + addendasMonto;
+  return proyecto.contractAmount + addendasMonto;
 }
 
 // Los datasets (`invoicesSet`/`paymentsSet`/etc.) son parámetros opcionales con default a
@@ -226,7 +234,7 @@ export function cobranzaConsolidada(
   paymentsSet: PaymentIlustrativo[] = payments,
   addendasSet: AddendaIlustrativa[] = addendas,
 ): CobranzaConsolidada {
-  const montoTotalPortafolio = proyectosSet.reduce((sum, p) => sum + montoTotal(p.id, addendasSet), 0);
+  const montoTotalPortafolio = proyectosSet.reduce((sum, p) => sum + montoTotal(p.id, addendasSet, proyectosSet), 0);
   const facturado = proyectosSet.reduce((sum, p) => sum + totalFacturado(p.id, invoicesSet), 0);
   const pagado = proyectosSet.reduce((sum, p) => sum + totalPagado(p.id, paymentsSet), 0);
   return {
@@ -246,9 +254,11 @@ export function semaforoDesfase(
   proyectoId: string,
   invoicesSet: InvoiceIlustrativa[] = invoices,
   addendasSet: AddendaIlustrativa[] = addendas,
+  proyectosSet: ProyectoIlustrativo[] = proyectos,
 ): { desfase: number; nivel: SemaforoDesfase } {
-  const proyecto = proyectoPorId(proyectoId);
-  const total = montoTotal(proyectoId, addendasSet);
+  const proyecto = proyectosSet.find((p) => p.id === proyectoId);
+  if (!proyecto) return { desfase: 0, nivel: 'alineado' };
+  const total = montoTotal(proyectoId, addendasSet, proyectosSet);
   const pctFacturado = total > 0 ? (totalFacturado(proyectoId, invoicesSet) / total) * 100 : 0;
   const desfase = Math.abs(proyecto.progress - pctFacturado);
   const nivel: SemaforoDesfase = desfase < 10 ? 'alineado' : desfase <= 25 ? 'amarillo' : 'rojo';
@@ -317,7 +327,7 @@ export function riesgoPortafolio(
   addendasSet: AddendaIlustrativa[] = addendas,
 ): RiesgoPortafolio[] {
   return proyectosSet.map((proyecto) => {
-    const { desfase, nivel: nivelDesfase } = semaforoDesfase(proyecto.id, invoicesSet, addendasSet);
+    const { desfase, nivel: nivelDesfase } = semaforoDesfase(proyecto.id, invoicesSet, addendasSet, proyectosSet);
     const bond = bondsSet.find((b) => b.proyectoId === proyecto.id);
     const match = matchResultPorProyecto(proyecto.id);
     const licitacion = match?.licitacionId ? licitaciones.find((l) => l.id === match.licitacionId) : undefined;
