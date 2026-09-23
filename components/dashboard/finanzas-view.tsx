@@ -3,11 +3,12 @@
 import { useMemo, useState } from 'react';
 import {
   AlertTriangle, ArrowUpRight, CalendarClock, CheckCircle2, Pencil, Plus, RotateCcw, Trash2,
-  CircleDollarSign, Clock3, FlaskConical, ShieldAlert, TrendingUp, WalletCards, X,
+  CircleDollarSign, Clock3, FlaskConical, ShieldAlert, TrendingUp, WalletCards,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -264,13 +265,10 @@ export function FinanzasView() {
         </div>
       </CardHeader>
       <CardContent className="finance-table-content">
-        {proyectoEditingId?.kind === 'new' && <ProyectoForm draft={proyectoDraft} setDraft={setProyectoDraft} onSave={saveProyecto} onCancel={cancelProyectoEdit} />}
         <div className="finance-table-scroll">
           <Table className="finanzas-table finanzas-portfolio-table">
             <TableHeader><TableRow><TableHead>Proyecto</TableHead><TableHead>Contrato</TableHead><TableHead>Facturado</TableHead><TableHead>Cobrado</TableHead><TableHead>Pendiente</TableHead><TableHead>Avance físico</TableHead><TableHead>Brecha</TableHead><TableHead>Riesgo</TableHead><TableHead aria-label="Acciones" /></TableRow></TableHeader>
-            <TableBody>{rowsToShow.map((row) => proyectoEditingId?.kind === 'existing' && proyectoEditingId.id === row.proyecto.id
-              ? <TableRow key={row.proyecto.id}><TableCell colSpan={9}><ProyectoForm draft={proyectoDraft} setDraft={setProyectoDraft} onSave={saveProyecto} onCancel={cancelProyectoEdit} /></TableCell></TableRow>
-              : <TableRow key={row.proyecto.id}>
+            <TableBody>{rowsToShow.map((row) => <TableRow key={row.proyecto.id}>
               <TableCell><div className="finance-project-cell"><strong>{row.proyecto.name}</strong><span>{row.proyecto.client} · {row.proyecto.coordinator}</span></div></TableCell>
               <TableCell><strong>{fmt(row.total)}</strong><span className="finance-cell-sub">{row.porEjercer > 0 ? `${fmt(row.porEjercer)} por ejercer` : 'Contrato agotado'}</span></TableCell>
               <TableCell><strong>{fmt(row.facturado)}</strong><span className="finance-cell-sub">{row.pctFacturado}%</span></TableCell>
@@ -289,6 +287,8 @@ export function FinanzasView() {
       </CardContent>
     </Card>
 
+    <ProyectoDialog open={proyectoEditingId !== null} isNew={proyectoEditingId?.kind === 'new'} draft={proyectoDraft} setDraft={setProyectoDraft} onSave={saveProyecto} onCancel={cancelProyectoEdit} />
+
     <div className="finanzas-transactions-grid">
       <Card className="executive-card finance-panel">
         <CardHeader>
@@ -299,10 +299,7 @@ export function FinanzasView() {
           </div>
         </CardHeader>
         <CardContent className="finance-table-content">
-          {invoiceEditingId?.kind === 'new' && <InvoiceForm draft={invoiceDraft} setDraft={setInvoiceDraft} proyectos={proyectos} onSave={saveInvoice} onCancel={cancelInvoiceEdit} />}
-          <div className="finance-table-scroll"><Table className="finanzas-table finance-compact-table"><TableHeader><TableRow><TableHead>Proyecto</TableHead><TableHead>Folio</TableHead><TableHead>Monto</TableHead><TableHead>Estado</TableHead><TableHead>Emisión</TableHead><TableHead aria-label="Acciones" /></TableRow></TableHeader><TableBody>{invoices.map((inv) => invoiceEditingId?.kind === 'existing' && invoiceEditingId.id === inv.id
-            ? <TableRow key={inv.id}><TableCell colSpan={6}><InvoiceForm draft={invoiceDraft} setDraft={setInvoiceDraft} proyectos={proyectos} onSave={saveInvoice} onCancel={cancelInvoiceEdit} /></TableCell></TableRow>
-            : <TableRow key={inv.id}>
+          <div className="finance-table-scroll"><Table className="finanzas-table finance-compact-table"><TableHeader><TableRow><TableHead>Proyecto</TableHead><TableHead>Folio</TableHead><TableHead>Monto</TableHead><TableHead>Estado</TableHead><TableHead>Emisión</TableHead><TableHead aria-label="Acciones" /></TableRow></TableHeader><TableBody>{invoices.map((inv) => <TableRow key={inv.id}>
               <TableCell>{proyectoPorId(inv.proyectoId, proyectos).name}</TableCell>
               <TableCell>{inv.folio}</TableCell>
               <TableCell><strong>{fmt(inv.amount)}</strong></TableCell>
@@ -322,10 +319,7 @@ export function FinanzasView() {
           <div className="finance-crud-actions"><Button variant="outline" size="sm" onClick={startNewPayment}><Plus />Agregar pago</Button></div>
         </CardHeader>
         <CardContent className="finance-table-content">
-          {paymentEditingId?.kind === 'new' && <PaymentForm draft={paymentDraft} setDraft={setPaymentDraft} proyectos={proyectos} onSave={savePayment} onCancel={cancelPaymentEdit} />}
-          <div className="finance-table-scroll"><Table className="finanzas-table finance-compact-table"><TableHeader><TableRow><TableHead>Proyecto</TableHead><TableHead>Monto</TableHead><TableHead>Fecha de pago</TableHead><TableHead aria-label="Acciones" /></TableRow></TableHeader><TableBody>{payments.map((payment) => paymentEditingId?.kind === 'existing' && paymentEditingId.id === payment.id
-            ? <TableRow key={payment.id}><TableCell colSpan={4}><PaymentForm draft={paymentDraft} setDraft={setPaymentDraft} proyectos={proyectos} onSave={savePayment} onCancel={cancelPaymentEdit} /></TableCell></TableRow>
-            : <TableRow key={payment.id}>
+          <div className="finance-table-scroll"><Table className="finanzas-table finance-compact-table"><TableHeader><TableRow><TableHead>Proyecto</TableHead><TableHead>Monto</TableHead><TableHead>Fecha de pago</TableHead><TableHead aria-label="Acciones" /></TableRow></TableHeader><TableBody>{payments.map((payment) => <TableRow key={payment.id}>
               <TableCell>{proyectoPorId(payment.proyectoId, proyectos).name}</TableCell>
               <TableCell><strong>{fmt(payment.amount)}</strong></TableCell>
               <TableCell>{payment.paymentDate}</TableCell>
@@ -337,79 +331,121 @@ export function FinanzasView() {
         </CardContent>
       </Card>
     </div>
+
+    <InvoiceDialog open={invoiceEditingId !== null} isNew={invoiceEditingId?.kind === 'new'} draft={invoiceDraft} setDraft={setInvoiceDraft} proyectos={proyectos} onSave={saveInvoice} onCancel={cancelInvoiceEdit} />
+    <PaymentDialog open={paymentEditingId !== null} isNew={paymentEditingId?.kind === 'new'} draft={paymentDraft} setDraft={setPaymentDraft} proyectos={proyectos} onSave={savePayment} onCancel={cancelPaymentEdit} />
+
     <p className="finance-crud-note"><FlaskConical aria-hidden="true" />Agregar, editar o eliminar aquí actualiza cobranza, riesgo y el resumen ejecutivo en vivo — pero solo en esta sesión del navegador, no queda guardado en ningún sistema.</p>
   </div>;
 }
 
-function InvoiceForm({ draft, setDraft, proyectos, onSave, onCancel }: {
-  draft: InvoiceDraft; setDraft: (d: InvoiceDraft) => void; proyectos: { id: string; name: string }[]; onSave: () => void; onCancel: () => void;
+function InvoiceDialog({ open, isNew, draft, setDraft, proyectos, onSave, onCancel }: {
+  open: boolean; isNew: boolean; draft: InvoiceDraft; setDraft: (d: InvoiceDraft) => void;
+  proyectos: { id: string; name: string }[]; onSave: () => void; onCancel: () => void;
 }) {
-  return <form className="finance-crud-form" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
-    <div className="finance-crud-field">
-      <label htmlFor="invoice-proyecto">Proyecto</label>
-      <Select value={draft.proyectoId} onValueChange={(value) => setDraft({ ...draft, proyectoId: value as string })}>
-        <SelectTrigger id="invoice-proyecto"><SelectValue /></SelectTrigger>
-        <SelectContent className="select-content-wide">{proyectos.map((p) => <SelectItem value={p.id} key={p.id}>{p.name}</SelectItem>)}</SelectContent>
-      </Select>
-    </div>
-    <div className="finance-crud-field"><label htmlFor="invoice-folio">Folio</label><Input id="invoice-folio" value={draft.folio} onChange={(e) => setDraft({ ...draft, folio: e.target.value })} placeholder="F-2026-0000" /></div>
-    <div className="finance-crud-field"><label htmlFor="invoice-amount">Monto</label><Input id="invoice-amount" type="number" min="0" value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} placeholder="0" /></div>
-    <div className="finance-crud-field">
-      <label htmlFor="invoice-status">Estado</label>
-      <Select value={draft.status} onValueChange={(value) => setDraft({ ...draft, status: value as InvoiceStatus })}>
-        <SelectTrigger id="invoice-status"><SelectValue /></SelectTrigger>
-        <SelectContent>{(Object.keys(invoiceStatusLabel) as InvoiceStatus[]).map((s) => <SelectItem value={s} key={s}>{invoiceStatusLabel[s]}</SelectItem>)}</SelectContent>
-      </Select>
-    </div>
-    <div className="finance-crud-field"><label htmlFor="invoice-date">Emisión</label><Input id="invoice-date" value={draft.issueDate} onChange={(e) => setDraft({ ...draft, issueDate: e.target.value })} placeholder="10 sep 2026" /></div>
-    <div className="finance-crud-form-actions">
-      <Button type="submit" size="sm">Guardar</Button>
-      <Button type="button" variant="ghost" size="sm" onClick={onCancel}><X />Cancelar</Button>
-    </div>
-  </form>;
+  return <Dialog open={open} onOpenChange={(next) => { if (!next) onCancel(); }}>
+    <DialogContent className="crud-dialog">
+      <DialogHeader>
+        <DialogTitle>{isNew ? 'Agregar factura' : 'Editar factura'}</DialogTitle>
+        <DialogDescription>Datos ilustrativos del portafolio de proyectos.</DialogDescription>
+      </DialogHeader>
+      <form className="crud-dialog-form" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
+        <div className="crud-dialog-field">
+          <label htmlFor="invoice-proyecto">Proyecto</label>
+          <Select value={draft.proyectoId} onValueChange={(value) => setDraft({ ...draft, proyectoId: value as string })}>
+            <SelectTrigger id="invoice-proyecto" className="crud-dialog-select-trigger"><SelectValue>{(value: string) => proyectos.find((p) => p.id === value)?.name ?? value}</SelectValue></SelectTrigger>
+            <SelectContent className="select-content-wide">{proyectos.map((p) => <SelectItem value={p.id} key={p.id}>{p.name}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <div className="crud-dialog-row">
+          <div className="crud-dialog-field"><label htmlFor="invoice-folio">Folio</label><Input id="invoice-folio" value={draft.folio} onChange={(e) => setDraft({ ...draft, folio: e.target.value })} placeholder="F-2026-0000" /></div>
+          <div className="crud-dialog-field"><label htmlFor="invoice-amount">Monto</label><Input id="invoice-amount" type="number" min="0" value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} placeholder="0" /></div>
+        </div>
+        <div className="crud-dialog-row">
+          <div className="crud-dialog-field">
+            <label htmlFor="invoice-status">Estado</label>
+            <Select value={draft.status} onValueChange={(value) => setDraft({ ...draft, status: value as InvoiceStatus })}>
+              <SelectTrigger id="invoice-status" className="crud-dialog-select-trigger"><SelectValue /></SelectTrigger>
+              <SelectContent>{(Object.keys(invoiceStatusLabel) as InvoiceStatus[]).map((s) => <SelectItem value={s} key={s}>{invoiceStatusLabel[s]}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="crud-dialog-field"><label htmlFor="invoice-date">Emisión</label><Input id="invoice-date" value={draft.issueDate} onChange={(e) => setDraft({ ...draft, issueDate: e.target.value })} placeholder="10 sep 2026" /></div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={onCancel}>Cancelar</Button>
+          <Button type="submit">Guardar</Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
+  </Dialog>;
 }
 
-function ProyectoForm({ draft, setDraft, onSave, onCancel }: {
-  draft: ProyectoDraft; setDraft: (d: ProyectoDraft) => void; onSave: () => void; onCancel: () => void;
+function ProyectoDialog({ open, isNew, draft, setDraft, onSave, onCancel }: {
+  open: boolean; isNew: boolean; draft: ProyectoDraft; setDraft: (d: ProyectoDraft) => void; onSave: () => void; onCancel: () => void;
 }) {
-  return <form className="finance-crud-form" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
-    <div className="finance-crud-field"><label htmlFor="proyecto-name">Nombre</label><Input id="proyecto-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Nombre del proyecto" /></div>
-    <div className="finance-crud-field"><label htmlFor="proyecto-client">Cliente</label><Input id="proyecto-client" value={draft.client} onChange={(e) => setDraft({ ...draft, client: e.target.value })} placeholder="Dependencia" /></div>
-    <div className="finance-crud-field">
-      <label htmlFor="proyecto-status">Estatus</label>
-      <Select value={draft.status} onValueChange={(value) => setDraft({ ...draft, status: value as ProjectStatus })}>
-        <SelectTrigger id="proyecto-status"><SelectValue /></SelectTrigger>
-        <SelectContent>{(Object.keys(projectStatusLabel) as ProjectStatus[]).map((s) => <SelectItem value={s} key={s}>{projectStatusLabel[s]}</SelectItem>)}</SelectContent>
-      </Select>
-    </div>
-    <div className="finance-crud-field"><label htmlFor="proyecto-progress">Avance físico %</label><Input id="proyecto-progress" type="number" min="0" max="100" value={draft.progress} onChange={(e) => setDraft({ ...draft, progress: e.target.value })} /></div>
-    <div className="finance-crud-field"><label htmlFor="proyecto-coordinator">Coordinador</label><Input id="proyecto-coordinator" value={draft.coordinator} onChange={(e) => setDraft({ ...draft, coordinator: e.target.value })} placeholder="Sin asignar" /></div>
-    <div className="finance-crud-field"><label htmlFor="proyecto-amount">Monto contratado</label><Input id="proyecto-amount" type="number" min="0" value={draft.contractAmount} onChange={(e) => setDraft({ ...draft, contractAmount: e.target.value })} placeholder="0" /></div>
-    <div className="finance-crud-field"><label htmlFor="proyecto-start">Inicio de contrato</label><Input id="proyecto-start" value={draft.contractStart} onChange={(e) => setDraft({ ...draft, contractStart: e.target.value })} placeholder="10 sep 2026" /></div>
-    <div className="finance-crud-field"><label htmlFor="proyecto-end">Fin de contrato</label><Input id="proyecto-end" value={draft.contractEnd} onChange={(e) => setDraft({ ...draft, contractEnd: e.target.value })} placeholder="10 sep 2027" /></div>
-    <div className="finance-crud-form-actions">
-      <Button type="submit" size="sm">Guardar</Button>
-      <Button type="button" variant="ghost" size="sm" onClick={onCancel}><X />Cancelar</Button>
-    </div>
-  </form>;
+  return <Dialog open={open} onOpenChange={(next) => { if (!next) onCancel(); }}>
+    <DialogContent className="crud-dialog crud-dialog-wide">
+      <DialogHeader>
+        <DialogTitle>{isNew ? 'Agregar proyecto' : 'Editar proyecto'}</DialogTitle>
+        <DialogDescription>Datos ilustrativos del portafolio de proyectos.</DialogDescription>
+      </DialogHeader>
+      <form className="crud-dialog-form" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
+        <div className="crud-dialog-row">
+          <div className="crud-dialog-field"><label htmlFor="proyecto-name">Nombre</label><Input id="proyecto-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Nombre del proyecto" /></div>
+          <div className="crud-dialog-field"><label htmlFor="proyecto-client">Cliente</label><Input id="proyecto-client" value={draft.client} onChange={(e) => setDraft({ ...draft, client: e.target.value })} placeholder="Dependencia" /></div>
+        </div>
+        <div className="crud-dialog-row">
+          <div className="crud-dialog-field">
+            <label htmlFor="proyecto-status">Estatus</label>
+            <Select value={draft.status} onValueChange={(value) => setDraft({ ...draft, status: value as ProjectStatus })}>
+              <SelectTrigger id="proyecto-status" className="crud-dialog-select-trigger"><SelectValue /></SelectTrigger>
+              <SelectContent>{(Object.keys(projectStatusLabel) as ProjectStatus[]).map((s) => <SelectItem value={s} key={s}>{projectStatusLabel[s]}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="crud-dialog-field"><label htmlFor="proyecto-progress">Avance físico %</label><Input id="proyecto-progress" type="number" min="0" max="100" value={draft.progress} onChange={(e) => setDraft({ ...draft, progress: e.target.value })} /></div>
+          <div className="crud-dialog-field"><label htmlFor="proyecto-coordinator">Coordinador</label><Input id="proyecto-coordinator" value={draft.coordinator} onChange={(e) => setDraft({ ...draft, coordinator: e.target.value })} placeholder="Sin asignar" /></div>
+        </div>
+        <div className="crud-dialog-row">
+          <div className="crud-dialog-field"><label htmlFor="proyecto-amount">Monto contratado</label><Input id="proyecto-amount" type="number" min="0" value={draft.contractAmount} onChange={(e) => setDraft({ ...draft, contractAmount: e.target.value })} placeholder="0" /></div>
+          <div className="crud-dialog-field"><label htmlFor="proyecto-start">Inicio de contrato</label><Input id="proyecto-start" value={draft.contractStart} onChange={(e) => setDraft({ ...draft, contractStart: e.target.value })} placeholder="10 sep 2026" /></div>
+          <div className="crud-dialog-field"><label htmlFor="proyecto-end">Fin de contrato</label><Input id="proyecto-end" value={draft.contractEnd} onChange={(e) => setDraft({ ...draft, contractEnd: e.target.value })} placeholder="10 sep 2027" /></div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={onCancel}>Cancelar</Button>
+          <Button type="submit">Guardar</Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
+  </Dialog>;
 }
 
-function PaymentForm({ draft, setDraft, proyectos, onSave, onCancel }: {
-  draft: PaymentDraft; setDraft: (d: PaymentDraft) => void; proyectos: { id: string; name: string }[]; onSave: () => void; onCancel: () => void;
+function PaymentDialog({ open, isNew, draft, setDraft, proyectos, onSave, onCancel }: {
+  open: boolean; isNew: boolean; draft: PaymentDraft; setDraft: (d: PaymentDraft) => void;
+  proyectos: { id: string; name: string }[]; onSave: () => void; onCancel: () => void;
 }) {
-  return <form className="finance-crud-form" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
-    <div className="finance-crud-field">
-      <label htmlFor="payment-proyecto">Proyecto</label>
-      <Select value={draft.proyectoId} onValueChange={(value) => setDraft({ ...draft, proyectoId: value as string })}>
-        <SelectTrigger id="payment-proyecto"><SelectValue /></SelectTrigger>
-        <SelectContent className="select-content-wide">{proyectos.map((p) => <SelectItem value={p.id} key={p.id}>{p.name}</SelectItem>)}</SelectContent>
-      </Select>
-    </div>
-    <div className="finance-crud-field"><label htmlFor="payment-amount">Monto</label><Input id="payment-amount" type="number" min="0" value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} placeholder="0" /></div>
-    <div className="finance-crud-field"><label htmlFor="payment-date">Fecha de pago</label><Input id="payment-date" value={draft.paymentDate} onChange={(e) => setDraft({ ...draft, paymentDate: e.target.value })} placeholder="10 sep 2026" /></div>
-    <div className="finance-crud-form-actions">
-      <Button type="submit" size="sm">Guardar</Button>
-      <Button type="button" variant="ghost" size="sm" onClick={onCancel}><X />Cancelar</Button>
-    </div>
-  </form>;
+  return <Dialog open={open} onOpenChange={(next) => { if (!next) onCancel(); }}>
+    <DialogContent className="crud-dialog">
+      <DialogHeader>
+        <DialogTitle>{isNew ? 'Agregar pago' : 'Editar pago'}</DialogTitle>
+        <DialogDescription>Datos ilustrativos del portafolio de proyectos.</DialogDescription>
+      </DialogHeader>
+      <form className="crud-dialog-form" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
+        <div className="crud-dialog-field">
+          <label htmlFor="payment-proyecto">Proyecto</label>
+          <Select value={draft.proyectoId} onValueChange={(value) => setDraft({ ...draft, proyectoId: value as string })}>
+            <SelectTrigger id="payment-proyecto" className="crud-dialog-select-trigger"><SelectValue>{(value: string) => proyectos.find((p) => p.id === value)?.name ?? value}</SelectValue></SelectTrigger>
+            <SelectContent className="select-content-wide">{proyectos.map((p) => <SelectItem value={p.id} key={p.id}>{p.name}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <div className="crud-dialog-row">
+          <div className="crud-dialog-field"><label htmlFor="payment-amount">Monto</label><Input id="payment-amount" type="number" min="0" value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} placeholder="0" /></div>
+          <div className="crud-dialog-field"><label htmlFor="payment-date">Fecha de pago</label><Input id="payment-date" value={draft.paymentDate} onChange={(e) => setDraft({ ...draft, paymentDate: e.target.value })} placeholder="10 sep 2026" /></div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={onCancel}>Cancelar</Button>
+          <Button type="submit">Guardar</Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
+  </Dialog>;
 }

@@ -19,10 +19,10 @@ import {
   Trash2,
   Users,
   WalletCards,
-  X,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -279,12 +279,8 @@ export function ObraView() {
           <Button variant="outline" size="sm" onClick={startNewGoal}><Plus />Agregar</Button>
         </CardHeader>
         <CardContent className="obra-goal-list">
-          {goalEditingId?.kind === 'new' && <GoalForm draft={goalDraft} setDraft={setGoalDraft} proyectos={proyectos} onSave={saveGoal} onCancel={cancelGoalEdit} />}
           {weeklyGoals.map((goal) => {
             const proyecto = proyectos.find((item) => item.id === goal.proyectoId);
-            if (goalEditingId?.kind === 'existing' && goalEditingId.id === goal.id) {
-              return <GoalForm key={goal.id} draft={goalDraft} setDraft={setGoalDraft} proyectos={proyectos} onSave={saveGoal} onCancel={cancelGoalEdit} />;
-            }
             return <article className="obra-goal-row" key={goal.id}>
               <div className="obra-goal-date"><strong>{goal.weekStart.slice(0, 2)}</strong><span>{goal.weekStart.slice(3, 6).toUpperCase()}</span></div>
               <div className="obra-goal-copy">
@@ -299,7 +295,7 @@ export function ObraView() {
               </div>
             </article>;
           })}
-          {!weeklyGoals.length && goalEditingId?.kind !== 'new' && <div className="obra-empty-state"><Target /><span>No hay objetivos registrados para este corte.</span></div>}
+          {!weeklyGoals.length && <div className="obra-empty-state"><Target /><span>No hay objetivos registrados para este corte.</span></div>}
         </CardContent>
       </Card>
 
@@ -335,13 +331,9 @@ export function ObraView() {
           </div>
         </CardHeader>
         <CardContent className="obra-bond-list">
-          {bondEditingId?.kind === 'new' && <BondForm draft={bondDraft} setDraft={setBondDraft} proyectos={proyectos} onSave={saveBond} onCancel={cancelBondEdit} />}
           {fianzasOrdenadas.map((bond) => {
             const proyecto = proyectos.find((item) => item.id === bond.proyectoId);
             const dias = diasParaVencer(bond);
-            if (bondEditingId?.kind === 'existing' && bondEditingId.id === bond.id) {
-              return <BondForm key={bond.id} draft={bondDraft} setDraft={setBondDraft} proyectos={proyectos} onSave={saveBond} onCancel={cancelBondEdit} />;
-            }
             return <article className={`obra-bond-row obra-bond-${bond.status}`} key={bond.id}>
               <div className="obra-bond-icon"><ShieldAlert /></div>
               <div className="obra-bond-copy">
@@ -355,7 +347,7 @@ export function ObraView() {
               </div>
             </article>;
           })}
-          {!fianzasOrdenadas.length && bondEditingId?.kind !== 'new' && <div className="obra-empty-state"><ShieldAlert /><span>No hay fianzas registradas.</span></div>}
+          {!fianzasOrdenadas.length && <div className="obra-empty-state"><ShieldAlert /><span>No hay fianzas registradas.</span></div>}
         </CardContent>
       </Card>
       <Card className="executive-card obra-tasks-card">
@@ -376,62 +368,92 @@ export function ObraView() {
       </Card>
       </div>
     </div>
+
+    <BondDialog open={bondEditingId !== null} isNew={bondEditingId?.kind === 'new'} draft={bondDraft} setDraft={setBondDraft} proyectos={proyectos} onSave={saveBond} onCancel={cancelBondEdit} />
+    <GoalDialog open={goalEditingId !== null} isNew={goalEditingId?.kind === 'new'} draft={goalDraft} setDraft={setGoalDraft} proyectos={proyectos} onSave={saveGoal} onCancel={cancelGoalEdit} />
+
     <p className="finance-crud-note"><ShieldAlert aria-hidden="true" />Agregar, editar o eliminar fianzas u objetivos aquí actualiza el ranking de riesgo y el resumen ejecutivo en vivo — pero solo en esta sesión del navegador, no queda guardado en ningún sistema.</p>
   </div>;
 }
 
-function BondForm({ draft, setDraft, proyectos, onSave, onCancel }: {
-  draft: BondDraft; setDraft: (d: BondDraft) => void; proyectos: { id: string; name: string }[]; onSave: () => void; onCancel: () => void;
+function BondDialog({ open, isNew, draft, setDraft, proyectos, onSave, onCancel }: {
+  open: boolean; isNew: boolean; draft: BondDraft; setDraft: (d: BondDraft) => void;
+  proyectos: { id: string; name: string }[]; onSave: () => void; onCancel: () => void;
 }) {
-  return <form className="finance-crud-form" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
-    <div className="finance-crud-field">
-      <label htmlFor="bond-proyecto">Proyecto</label>
-      <Select value={draft.proyectoId} onValueChange={(value) => setDraft({ ...draft, proyectoId: value as string })}>
-        <SelectTrigger id="bond-proyecto"><SelectValue /></SelectTrigger>
-        <SelectContent className="select-content-wide">{proyectos.map((p) => <SelectItem value={p.id} key={p.id}>{p.name}</SelectItem>)}</SelectContent>
-      </Select>
-    </div>
-    <div className="finance-crud-field">
-      <label htmlFor="bond-type">Tipo</label>
-      <Select value={draft.type} onValueChange={(value) => setDraft({ ...draft, type: value as BondType })}>
-        <SelectTrigger id="bond-type"><SelectValue /></SelectTrigger>
-        <SelectContent>{(Object.keys(bondTypeLabel) as BondType[]).map((t) => <SelectItem value={t} key={t}>{bondTypeLabel[t]}</SelectItem>)}</SelectContent>
-      </Select>
-    </div>
-    <div className="finance-crud-field"><label htmlFor="bond-insurer">Aseguradora</label><Input id="bond-insurer" value={draft.insurer} onChange={(e) => setDraft({ ...draft, insurer: e.target.value })} placeholder="Fianzas Guardiana" /></div>
-    <div className="finance-crud-field"><label htmlFor="bond-policy">Póliza</label><Input id="bond-policy" value={draft.policyNumber} onChange={(e) => setDraft({ ...draft, policyNumber: e.target.value })} placeholder="FG-2026-0000" /></div>
-    <div className="finance-crud-field"><label htmlFor="bond-expiry">Vence</label><Input id="bond-expiry" value={draft.expiryDate} onChange={(e) => setDraft({ ...draft, expiryDate: e.target.value })} placeholder="10 sep 2026" /></div>
-    <div className="finance-crud-field">
-      <label htmlFor="bond-status">Estatus</label>
-      <Select value={draft.status} onValueChange={(value) => setDraft({ ...draft, status: value as BondStatus })}>
-        <SelectTrigger id="bond-status"><SelectValue /></SelectTrigger>
-        <SelectContent>{bondStatusOptions.map((s) => <SelectItem value={s} key={s}>{bondStatusLabel[s]}</SelectItem>)}</SelectContent>
-      </Select>
-    </div>
-    <div className="finance-crud-form-actions">
-      <Button type="submit" size="sm">Guardar</Button>
-      <Button type="button" variant="ghost" size="sm" onClick={onCancel}><X />Cancelar</Button>
-    </div>
-  </form>;
+  return <Dialog open={open} onOpenChange={(next) => { if (!next) onCancel(); }}>
+    <DialogContent className="crud-dialog">
+      <DialogHeader>
+        <DialogTitle>{isNew ? 'Agregar fianza' : 'Editar fianza'}</DialogTitle>
+        <DialogDescription>Datos ilustrativos del portafolio de proyectos.</DialogDescription>
+      </DialogHeader>
+      <form className="crud-dialog-form" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
+        <div className="crud-dialog-row">
+          <div className="crud-dialog-field">
+            <label htmlFor="bond-proyecto">Proyecto</label>
+            <Select value={draft.proyectoId} onValueChange={(value) => setDraft({ ...draft, proyectoId: value as string })}>
+              <SelectTrigger id="bond-proyecto" className="crud-dialog-select-trigger"><SelectValue>{(value: string) => proyectos.find((p) => p.id === value)?.name ?? value}</SelectValue></SelectTrigger>
+              <SelectContent className="select-content-wide">{proyectos.map((p) => <SelectItem value={p.id} key={p.id}>{p.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="crud-dialog-field">
+            <label htmlFor="bond-type">Tipo</label>
+            <Select value={draft.type} onValueChange={(value) => setDraft({ ...draft, type: value as BondType })}>
+              <SelectTrigger id="bond-type" className="crud-dialog-select-trigger"><SelectValue /></SelectTrigger>
+              <SelectContent>{(Object.keys(bondTypeLabel) as BondType[]).map((t) => <SelectItem value={t} key={t}>{bondTypeLabel[t]}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="crud-dialog-row">
+          <div className="crud-dialog-field"><label htmlFor="bond-insurer">Aseguradora</label><Input id="bond-insurer" value={draft.insurer} onChange={(e) => setDraft({ ...draft, insurer: e.target.value })} placeholder="Fianzas Guardiana" /></div>
+          <div className="crud-dialog-field"><label htmlFor="bond-policy">Póliza</label><Input id="bond-policy" value={draft.policyNumber} onChange={(e) => setDraft({ ...draft, policyNumber: e.target.value })} placeholder="FG-2026-0000" /></div>
+        </div>
+        <div className="crud-dialog-row">
+          <div className="crud-dialog-field"><label htmlFor="bond-expiry">Vence</label><Input id="bond-expiry" value={draft.expiryDate} onChange={(e) => setDraft({ ...draft, expiryDate: e.target.value })} placeholder="10 sep 2026" /></div>
+          <div className="crud-dialog-field">
+            <label htmlFor="bond-status">Estatus</label>
+            <Select value={draft.status} onValueChange={(value) => setDraft({ ...draft, status: value as BondStatus })}>
+              <SelectTrigger id="bond-status" className="crud-dialog-select-trigger"><SelectValue /></SelectTrigger>
+              <SelectContent>{bondStatusOptions.map((s) => <SelectItem value={s} key={s}>{bondStatusLabel[s]}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={onCancel}>Cancelar</Button>
+          <Button type="submit">Guardar</Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
+  </Dialog>;
 }
 
-function GoalForm({ draft, setDraft, proyectos, onSave, onCancel }: {
-  draft: GoalDraft; setDraft: (d: GoalDraft) => void; proyectos: { id: string; name: string }[]; onSave: () => void; onCancel: () => void;
+function GoalDialog({ open, isNew, draft, setDraft, proyectos, onSave, onCancel }: {
+  open: boolean; isNew: boolean; draft: GoalDraft; setDraft: (d: GoalDraft) => void;
+  proyectos: { id: string; name: string }[]; onSave: () => void; onCancel: () => void;
 }) {
-  return <form className="finance-crud-form" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
-    <div className="finance-crud-field">
-      <label htmlFor="goal-proyecto">Proyecto</label>
-      <Select value={draft.proyectoId} onValueChange={(value) => setDraft({ ...draft, proyectoId: value as string })}>
-        <SelectTrigger id="goal-proyecto"><SelectValue /></SelectTrigger>
-        <SelectContent className="select-content-wide">{proyectos.map((p) => <SelectItem value={p.id} key={p.id}>{p.name}</SelectItem>)}</SelectContent>
-      </Select>
-    </div>
-    <div className="finance-crud-field"><label htmlFor="goal-week">Semana</label><Input id="goal-week" value={draft.weekStart} onChange={(e) => setDraft({ ...draft, weekStart: e.target.value })} placeholder="15 sep 2026" /></div>
-    <div className="finance-crud-field"><label htmlFor="goal-objetivo">Objetivo</label><Input id="goal-objetivo" value={draft.objetivo} onChange={(e) => setDraft({ ...draft, objetivo: e.target.value })} placeholder="Colado de losa" /></div>
-    <div className="finance-crud-field"><label htmlFor="goal-pct">Completado %</label><Input id="goal-pct" type="number" min="0" max="100" value={draft.completadoPct} onChange={(e) => setDraft({ ...draft, completadoPct: e.target.value })} /></div>
-    <div className="finance-crud-form-actions">
-      <Button type="submit" size="sm">Guardar</Button>
-      <Button type="button" variant="ghost" size="sm" onClick={onCancel}><X />Cancelar</Button>
-    </div>
-  </form>;
+  return <Dialog open={open} onOpenChange={(next) => { if (!next) onCancel(); }}>
+    <DialogContent className="crud-dialog">
+      <DialogHeader>
+        <DialogTitle>{isNew ? 'Agregar objetivo semanal' : 'Editar objetivo semanal'}</DialogTitle>
+        <DialogDescription>Datos ilustrativos del portafolio de proyectos.</DialogDescription>
+      </DialogHeader>
+      <form className="crud-dialog-form" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
+        <div className="crud-dialog-field">
+          <label htmlFor="goal-proyecto">Proyecto</label>
+          <Select value={draft.proyectoId} onValueChange={(value) => setDraft({ ...draft, proyectoId: value as string })}>
+            <SelectTrigger id="goal-proyecto" className="crud-dialog-select-trigger"><SelectValue>{(value: string) => proyectos.find((p) => p.id === value)?.name ?? value}</SelectValue></SelectTrigger>
+            <SelectContent className="select-content-wide">{proyectos.map((p) => <SelectItem value={p.id} key={p.id}>{p.name}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <div className="crud-dialog-row">
+          <div className="crud-dialog-field"><label htmlFor="goal-week">Semana</label><Input id="goal-week" value={draft.weekStart} onChange={(e) => setDraft({ ...draft, weekStart: e.target.value })} placeholder="15 sep 2026" /></div>
+          <div className="crud-dialog-field"><label htmlFor="goal-pct">Completado %</label><Input id="goal-pct" type="number" min="0" max="100" value={draft.completadoPct} onChange={(e) => setDraft({ ...draft, completadoPct: e.target.value })} /></div>
+        </div>
+        <div className="crud-dialog-field"><label htmlFor="goal-objetivo">Objetivo</label><Input id="goal-objetivo" value={draft.objetivo} onChange={(e) => setDraft({ ...draft, objetivo: e.target.value })} placeholder="Colado de losa" /></div>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={onCancel}>Cancelar</Button>
+          <Button type="submit">Guardar</Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
+  </Dialog>;
 }

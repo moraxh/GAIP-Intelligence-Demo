@@ -1507,6 +1507,18 @@ button:focus-visible,a:focus-visible,input:focus-visible,[role="button"]:focus-v
 .select-content-wide{width:420px!important;min-width:420px!important;max-width:92vw!important}
 .select-content-wide [data-slot="select-item"]{width:100%;min-width:0;display:flex!important}
 .select-content-wide [data-slot="select-item"]>div:first-child{display:block!important;flex:1 1 auto!important;min-width:0!important;max-width:100%!important;overflow:hidden!important;white-space:nowrap!important;text-overflow:ellipsis!important}
+
+/* --- Modales de CRUD (facturas, pagos, proyectos, fianzas, objetivos) --- */
+.crud-dialog{width:480px!important;max-width:92vw!important}
+.crud-dialog-wide{width:620px!important}
+.crud-dialog [data-slot="dialog-title"]{font-size:1rem;color:#192c31}
+.crud-dialog [data-slot="dialog-description"]{font-size:.78rem;color:#7b8d96}
+.crud-dialog-form{display:flex;flex-direction:column;gap:14px;margin-top:6px}
+.crud-dialog-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.crud-dialog-field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.crud-dialog-field label{font-size:.68rem;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:#58707d}
+.crud-dialog-select-trigger{width:100%!important}
+.crud-dialog [data-slot="dialog-footer"]{margin-top:4px}
 .finance-progress-cell{display:flex;align-items:center;gap:8px;min-width:84px}
 .finance-progress-cell>strong{color:#2b4351;font-size:.68rem;font-variant-numeric:tabular-nums}
 .finance-mini-track{width:48px;height:6px;border-radius:999px;background:#e4edf1;overflow:hidden}
