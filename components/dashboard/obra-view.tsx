@@ -388,7 +388,7 @@ function BondForm({ draft, setDraft, proyectos, onSave, onCancel }: {
       <label htmlFor="bond-proyecto">Proyecto</label>
       <Select value={draft.proyectoId} onValueChange={(value) => setDraft({ ...draft, proyectoId: value as string })}>
         <SelectTrigger id="bond-proyecto"><SelectValue /></SelectTrigger>
-        <SelectContent>{proyectos.map((p) => <SelectItem value={p.id} key={p.id}>{p.name}</SelectItem>)}</SelectContent>
+        <SelectContent className="select-content-wide">{proyectos.map((p) => <SelectItem value={p.id} key={p.id}>{p.name}</SelectItem>)}</SelectContent>
       </Select>
     </div>
     <div className="finance-crud-field">
@@ -423,7 +423,7 @@ function GoalForm({ draft, setDraft, proyectos, onSave, onCancel }: {
       <label htmlFor="goal-proyecto">Proyecto</label>
       <Select value={draft.proyectoId} onValueChange={(value) => setDraft({ ...draft, proyectoId: value as string })}>
         <SelectTrigger id="goal-proyecto"><SelectValue /></SelectTrigger>
-        <SelectContent>{proyectos.map((p) => <SelectItem value={p.id} key={p.id}>{p.name}</SelectItem>)}</SelectContent>
+        <SelectContent className="select-content-wide">{proyectos.map((p) => <SelectItem value={p.id} key={p.id}>{p.name}</SelectItem>)}</SelectContent>
       </Select>
     </div>
     <div className="finance-crud-field"><label htmlFor="goal-week">Semana</label><Input id="goal-week" value={draft.weekStart} onChange={(e) => setDraft({ ...draft, weekStart: e.target.value })} placeholder="15 sep 2026" /></div>

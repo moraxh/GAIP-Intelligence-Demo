@@ -349,7 +349,7 @@ function InvoiceForm({ draft, setDraft, proyectos, onSave, onCancel }: {
       <label htmlFor="invoice-proyecto">Proyecto</label>
       <Select value={draft.proyectoId} onValueChange={(value) => setDraft({ ...draft, proyectoId: value as string })}>
         <SelectTrigger id="invoice-proyecto"><SelectValue /></SelectTrigger>
-        <SelectContent>{proyectos.map((p) => <SelectItem value={p.id} key={p.id}>{p.name}</SelectItem>)}</SelectContent>
+        <SelectContent className="select-content-wide">{proyectos.map((p) => <SelectItem value={p.id} key={p.id}>{p.name}</SelectItem>)}</SelectContent>
       </Select>
     </div>
     <div className="finance-crud-field"><label htmlFor="invoice-folio">Folio</label><Input id="invoice-folio" value={draft.folio} onChange={(e) => setDraft({ ...draft, folio: e.target.value })} placeholder="F-2026-0000" /></div>
@@ -402,7 +402,7 @@ function PaymentForm({ draft, setDraft, proyectos, onSave, onCancel }: {
       <label htmlFor="payment-proyecto">Proyecto</label>
       <Select value={draft.proyectoId} onValueChange={(value) => setDraft({ ...draft, proyectoId: value as string })}>
         <SelectTrigger id="payment-proyecto"><SelectValue /></SelectTrigger>
-        <SelectContent>{proyectos.map((p) => <SelectItem value={p.id} key={p.id}>{p.name}</SelectItem>)}</SelectContent>
+        <SelectContent className="select-content-wide">{proyectos.map((p) => <SelectItem value={p.id} key={p.id}>{p.name}</SelectItem>)}</SelectContent>
       </Select>
     </div>
     <div className="finance-crud-field"><label htmlFor="payment-amount">Monto</label><Input id="payment-amount" type="number" min="0" value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} placeholder="0" /></div>

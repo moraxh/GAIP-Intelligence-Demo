@@ -1500,6 +1500,13 @@ button:focus-visible,a:focus-visible,input:focus-visible,[role="button"]:focus-v
 .finance-crud-form-actions button svg{width:13px!important;height:13px!important;margin-right:3px}
 .finance-crud-note{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:.72rem;color:#8b6a58}
 .finance-crud-note svg{width:14px!important;height:14px!important;flex-shrink:0;color:#c98a1f}
+
+/* Selects de "Proyecto" en formularios CRUD (Finanzas/Obra): los nombres de proyecto son
+   largos y el ancho por defecto de shadcn/base-ui iguala al trigger angosto, cortando el
+   texto a media palabra. Ancho fijo + truncate con elipsis en vez de corte crudo. */
+.select-content-wide{width:340px!important;min-width:340px!important;max-width:90vw!important}
+.select-content-wide [data-slot="select-item"]{width:100%}
+.select-content-wide [data-slot="select-item"] span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .finance-progress-cell{display:flex;align-items:center;gap:8px;min-width:84px}
 .finance-progress-cell>strong{color:#2b4351;font-size:.68rem;font-variant-numeric:tabular-nums}
 .finance-mini-track{width:48px;height:6px;border-radius:999px;background:#e4edf1;overflow:hidden}
