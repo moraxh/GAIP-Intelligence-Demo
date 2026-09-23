@@ -22,10 +22,11 @@ import {
 import { FinanzasView } from '@/components/dashboard/finanzas-view';
 import { ObraView } from '@/components/dashboard/obra-view';
 import {
-  bondsPorVencer, cobranzaConsolidada, diasEntreFallo, diasParaVencer, montoTotal, proyectoPorId, proyectos, semaforoDesfase, totalFacturado,
+  bondsPorVencer, bondsPorVencerDe, cobranzaConsolidada, diasEntreFallo, diasParaVencer, montoTotal, proyectoPorId, proyectos, semaforoDesfase, totalFacturado,
   matchResultPorProyecto, matchResultPorLicitacion, matchResults, riesgoPortafolio,
 } from '@/lib/mock-data-finanzas-obra';
 import { fmtMXN, licitacionPorId as licitacionPorIdSafe } from '@/lib/mock-data-helpers';
+import { usePortfolio } from '@/lib/portfolio-store';
 
 type View = 'panorama' | 'licitaciones' | 'ofertas' | 'detalle' | 'finanzas' | 'obra';
 type RoutedView = Exclude<View, 'detalle'>;
@@ -397,23 +398,27 @@ function Dashboard({ onAll, onHitos, onDetail, onNavigateView }: { onAll: () => 
   const tareasTramoIIISinIniciar = tramoIII.tareas?.filter((tarea) => tarea.avance === 0).length ?? 0;
   const tareasAliciaConFallo = [...aliciaAbiertasTramoII, ...aliciaAbiertasTramoIII];
   const entityBars = porEntidad.slice(0, 5);
-  const cobranza = cobranzaConsolidada();
-  const executionRows = proyectos.map((proyecto) => {
-    const total = montoTotal(proyecto.id);
-    const facturado = totalFacturado(proyecto.id);
-    const { desfase, nivel } = semaforoDesfase(proyecto.id);
+  const portfolio = usePortfolio();
+  const cobranza = cobranzaConsolidada(portfolio.proyectos, portfolio.invoices, portfolio.payments, portfolio.addendas);
+  const bondsPorVencerLive = bondsPorVencerDe(portfolio.bonds);
+  const executionRows = portfolio.proyectos.map((proyecto) => {
+    const total = montoTotal(proyecto.id, portfolio.addendas);
+    const facturado = totalFacturado(proyecto.id, portfolio.invoices);
+    const { desfase, nivel } = semaforoDesfase(proyecto.id, portfolio.invoices, portfolio.addendas);
     return { proyecto, facturadoPct: total > 0 ? Math.round((facturado / total) * 100) : 0, desfase, nivel };
   }).sort((a, b) => b.desfase - a.desfase).slice(0, 3);
-  const fianzasProximas = bondsPorVencer.slice(0, 2).map((fianza) => {
-    const proyecto = proyectoPorId(fianza.proyectoId);
+  const fianzasProximas = bondsPorVencerLive.slice(0, 2).map((fianza) => {
+    const proyecto = portfolio.proyectos.find((p) => p.id === fianza.proyectoId) ?? proyectoPorId(fianza.proyectoId);
     const match = matchResultPorProyecto(fianza.proyectoId);
     const licitacion = match?.licitacionId ? licitacionPorIdSafe(match.licitacionId) : undefined;
     return { fianza, proyecto, dias: diasParaVencer(fianza), licitacion };
   }).filter((item): item is typeof item & { proyecto: NonNullable<typeof item.proyecto> } => Boolean(item.proyecto));
   // Único hallazgo de las 4 filas que cruza hasta el Tablero de Proyectos (ilustrativo), no solo
   // ComprasMX × Gantt: combina desfase avance/facturación + fianza vs. fallo + carga de equipo
-  // en una sola pregunta de negocio (docs/ejemplo-ilustrativo-cruce.md §3.6).
-  const riesgoTop = riesgoPortafolio()[0];
+  // en una sola pregunta de negocio (docs/ejemplo-ilustrativo-cruce.md §3.6). Se recalcula sobre
+  // el estado editable del portafolio, así que agregar/editar una factura aquí puede mover este
+  // hallazgo en vivo.
+  const riesgoTop = riesgoPortafolio(portfolio.proyectos, portfolio.invoices, portfolio.bonds, portfolio.addendas)[0];
   const riesgoMatch = riesgoTop ? matchResultPorProyecto(riesgoTop.proyecto.id) : undefined;
   const riesgoLicitacion = riesgoMatch?.licitacionId ? licitacionPorIdSafe(riesgoMatch.licitacionId) : undefined;
   const alertas = [
@@ -461,7 +466,7 @@ function Dashboard({ onAll, onHitos, onDetail, onNavigateView }: { onAll: () => 
     { label: 'ComprasMX', type: 'Cruce activo', detail: 'Fechas de fallo, etapa y expediente', icon: FileStack, view: 'licitaciones' as View, status: 'active' },
     { label: 'Excel de Gantt', type: 'Cruce activo', detail: 'Tareas, avance y responsables', icon: Users, view: 'licitaciones' as View, status: 'active' },
     { label: 'Excel de Ofertas', type: 'Módulo independiente', detail: `${oferta.monto} · ${oferta.empresa}`, icon: TrendingUp, view: 'ofertas' as View, status: 'independent' },
-    { label: 'Tablero de Proyectos', type: 'Vista de concepto', detail: `${proyectos.length} proyectos ilustrativos`, icon: Building2, view: 'finanzas' as View, status: 'illustrative' },
+    { label: 'Tablero de Proyectos', type: 'Vista de concepto', detail: `${portfolio.proyectos.length} proyectos ilustrativos`, icon: Building2, view: 'finanzas' as View, status: 'illustrative' },
   ];
 
   return <div className="executive-dashboard decision-dashboard">
@@ -492,7 +497,7 @@ function Dashboard({ onAll, onHitos, onDetail, onNavigateView }: { onAll: () => 
     <section className="decision-execution" aria-labelledby="decision-execution-title">
       <div className="decision-section-heading"><div><h3 id="decision-execution-title">Ejecución de adjudicados</h3><p>La segunda capa del panorama: obra, facturación y obligaciones posteriores al fallo.</p></div><span className="decision-illustrative-badge">Datos ilustrativos · no afecta alertas reales</span></div>
       <div className="decision-execution-metrics">
-        <div><span>Proyectos activos</span><strong>{proyectos.length}</strong><small>en el tablero de proyectos</small></div>
+        <div><span>Proyectos activos</span><strong>{portfolio.proyectos.length}</strong><small>en el tablero de proyectos</small></div>
         <div><span>Facturado del portafolio</span><strong>{fmtMXN(cobranza.facturado)}</strong><small>{fmtMXN(cobranza.pendientePorCobrar)} pendiente por cobrar</small></div>
         <div><span>Por ejercer</span><strong>{fmtMXN(cobranza.porEjercer)}</strong><small>sobre {fmtMXN(cobranza.montoTotal)} contratados</small></div>
       </div>

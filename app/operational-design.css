@@ -1477,6 +1477,22 @@ button:focus-visible,a:focus-visible,input:focus-visible,[role="button"]:focus-v
 .finance-project-cell span,.finance-cell-sub{display:block;margin-top:4px;color:#7b8d96;font-size:.63rem;line-height:1.25}
 .finanzas-portfolio-table td>strong{color:#2b4351;font-size:.72rem;font-variant-numeric:tabular-nums;white-space:nowrap}
 .finance-text-warning{color:#a56c20!important}.finance-text-ok{color:#397857!important}
+
+/* --- Finanzas: CRUD editable de facturas/pagos (en memoria, no persiste) --- */
+.finance-crud-actions{display:flex;align-items:center;gap:8px}
+.finance-crud-actions button svg{width:14px!important;height:14px!important;margin-right:4px}
+.finance-row-actions{display:flex;align-items:center;gap:4px;justify-content:flex-end}
+.finance-row-actions button{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:1px solid #d9e0e7;border-radius:6px;background:#fff;color:#607582;cursor:pointer}
+.finance-row-actions button:hover{background:#f5f8fa;border-color:#9db3bf;color:#193244}
+.finance-row-actions button svg{width:13px!important;height:13px!important}
+.finance-crud-form{display:flex;flex-wrap:wrap;gap:10px;align-items:end;padding:14px;margin:0 0 12px;border:1px solid #cfe0ea;border-radius:10px;background:#f5faff}
+.finance-crud-field{display:flex;flex-direction:column;gap:4px;min-width:130px;flex:1 1 130px}
+.finance-crud-field label{font-size:.64rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#58707d}
+.finance-crud-field [data-slot="select-trigger"]{width:100%}
+.finance-crud-form-actions{display:flex;gap:6px;flex:0 0 auto}
+.finance-crud-form-actions button svg{width:13px!important;height:13px!important;margin-right:3px}
+.finance-crud-note{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:.72rem;color:#8b6a58}
+.finance-crud-note svg{width:14px!important;height:14px!important;flex-shrink:0;color:#c98a1f}
 .finance-progress-cell{display:flex;align-items:center;gap:8px;min-width:84px}
 .finance-progress-cell>strong{color:#2b4351;font-size:.68rem;font-variant-numeric:tabular-nums}
 .finance-mini-track{width:48px;height:6px;border-radius:999px;background:#e4edf1;overflow:hidden}

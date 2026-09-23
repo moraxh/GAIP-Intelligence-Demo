@@ -193,18 +193,23 @@ export function matchResultPorLicitacion(licitacionId: string): MatchResult | un
   return matchResults.find((r) => r.autoLinked && r.licitacionId === licitacionId);
 }
 
-export function montoTotal(proyectoId: string): number {
+export function montoTotal(proyectoId: string, addendasSet: AddendaIlustrativa[] = addendas): number {
   const contrato = proyectoPorId(proyectoId).contractAmount;
-  const addendasMonto = addendas.filter((a) => a.proyectoId === proyectoId).reduce((sum, a) => sum + a.amount, 0);
+  const addendasMonto = addendasSet.filter((a) => a.proyectoId === proyectoId).reduce((sum, a) => sum + a.amount, 0);
   return contrato + addendasMonto;
 }
 
-export function totalFacturado(proyectoId: string): number {
-  return invoices.filter((i) => i.proyectoId === proyectoId && (i.status === 'facturado' || i.status === 'pagado')).reduce((sum, i) => sum + i.amount, 0);
+// Los datasets (`invoicesSet`/`paymentsSet`/etc.) son parámetros opcionales con default a
+// las constantes ilustrativas de este archivo. Esto permite que la UI editable de Finanzas
+// (CRUD de facturas/pagos, ver components/dashboard/finanzas-view.tsx) recalcule cobranza,
+// desfase y riesgo de portafolio sobre SU copia editable en memoria, propagando el cambio
+// al resumen ejecutivo y a Obra, sin mutar estas constantes ni duplicar la lógica de cálculo.
+export function totalFacturado(proyectoId: string, invoicesSet: InvoiceIlustrativa[] = invoices): number {
+  return invoicesSet.filter((i) => i.proyectoId === proyectoId && (i.status === 'facturado' || i.status === 'pagado')).reduce((sum, i) => sum + i.amount, 0);
 }
 
-export function totalPagado(proyectoId: string): number {
-  return payments.filter((p) => p.proyectoId === proyectoId).reduce((sum, p) => sum + p.amount, 0);
+export function totalPagado(proyectoId: string, paymentsSet: PaymentIlustrativo[] = payments): number {
+  return paymentsSet.filter((p) => p.proyectoId === proyectoId).reduce((sum, p) => sum + p.amount, 0);
 }
 
 export type CobranzaConsolidada = {
@@ -215,10 +220,15 @@ export type CobranzaConsolidada = {
   porEjercer: number;
 };
 
-export function cobranzaConsolidada(): CobranzaConsolidada {
-  const montoTotalPortafolio = proyectos.reduce((sum, p) => sum + montoTotal(p.id), 0);
-  const facturado = proyectos.reduce((sum, p) => sum + totalFacturado(p.id), 0);
-  const pagado = proyectos.reduce((sum, p) => sum + totalPagado(p.id), 0);
+export function cobranzaConsolidada(
+  proyectosSet: ProyectoIlustrativo[] = proyectos,
+  invoicesSet: InvoiceIlustrativa[] = invoices,
+  paymentsSet: PaymentIlustrativo[] = payments,
+  addendasSet: AddendaIlustrativa[] = addendas,
+): CobranzaConsolidada {
+  const montoTotalPortafolio = proyectosSet.reduce((sum, p) => sum + montoTotal(p.id, addendasSet), 0);
+  const facturado = proyectosSet.reduce((sum, p) => sum + totalFacturado(p.id, invoicesSet), 0);
+  const pagado = proyectosSet.reduce((sum, p) => sum + totalPagado(p.id, paymentsSet), 0);
   return {
     montoTotal: montoTotalPortafolio,
     facturado,
@@ -232,10 +242,14 @@ export type SemaforoDesfase = 'alineado' | 'amarillo' | 'rojo';
 
 // Compara avance físico (obra) contra % facturado del contrato — el cruce que expone
 // si se factura al ritmo real de avance. Ver docs/ejemplo-ilustrativo-cruce.md §3.2.
-export function semaforoDesfase(proyectoId: string): { desfase: number; nivel: SemaforoDesfase } {
+export function semaforoDesfase(
+  proyectoId: string,
+  invoicesSet: InvoiceIlustrativa[] = invoices,
+  addendasSet: AddendaIlustrativa[] = addendas,
+): { desfase: number; nivel: SemaforoDesfase } {
   const proyecto = proyectoPorId(proyectoId);
-  const total = montoTotal(proyectoId);
-  const pctFacturado = total > 0 ? (totalFacturado(proyectoId) / total) * 100 : 0;
+  const total = montoTotal(proyectoId, addendasSet);
+  const pctFacturado = total > 0 ? (totalFacturado(proyectoId, invoicesSet) / total) * 100 : 0;
   const desfase = Math.abs(proyecto.progress - pctFacturado);
   const nivel: SemaforoDesfase = desfase < 10 ? 'alineado' : desfase <= 25 ? 'amarillo' : 'rojo';
   return { desfase: Math.round(desfase * 10) / 10, nivel };
@@ -274,7 +288,10 @@ export function diasEntreFallo(bond: BondIlustrativo, fallo: string | undefined)
   return Math.round((expiry.getTime() - falloDate.getTime()) / 86_400_000);
 }
 
-export const bondsPorVencer = bonds.filter((b) => b.status === 'por_vencer' || b.status === 'vencida').sort((a, b) => diasParaVencer(a) - diasParaVencer(b));
+export function bondsPorVencerDe(bondsSet: BondIlustrativo[] = bonds): BondIlustrativo[] {
+  return bondsSet.filter((b) => b.status === 'por_vencer' || b.status === 'vencida').sort((a, b) => diasParaVencer(a) - diasParaVencer(b));
+}
+export const bondsPorVencer = bondsPorVencerDe();
 
 // --- Ranking de riesgo de portafolio (docs/ejemplo-ilustrativo-cruce.md §3.6) ---
 // Combina las tres señales individuales ya expuestas por separado en Finanzas/Obra/Cruce
@@ -293,15 +310,20 @@ function cargaPorCoordinador(nombre: string): { asignaciones: number; avance: nu
   return carga.find((c) => c.nombre.trim().toLocaleLowerCase('es-MX') === normalizado);
 }
 
-export function riesgoPortafolio(): RiesgoPortafolio[] {
-  return proyectos.map((proyecto) => {
-    const { desfase, nivel: nivelDesfase } = semaforoDesfase(proyecto.id);
-    const bond = bonds.find((b) => b.proyectoId === proyecto.id);
+export function riesgoPortafolio(
+  proyectosSet: ProyectoIlustrativo[] = proyectos,
+  invoicesSet: InvoiceIlustrativa[] = invoices,
+  bondsSet: BondIlustrativo[] = bonds,
+  addendasSet: AddendaIlustrativa[] = addendas,
+): RiesgoPortafolio[] {
+  return proyectosSet.map((proyecto) => {
+    const { desfase, nivel: nivelDesfase } = semaforoDesfase(proyecto.id, invoicesSet, addendasSet);
+    const bond = bondsSet.find((b) => b.proyectoId === proyecto.id);
     const match = matchResultPorProyecto(proyecto.id);
     const licitacion = match?.licitacionId ? licitaciones.find((l) => l.id === match.licitacionId) : undefined;
     const diasFianza = bond ? diasEntreFallo(bond, licitacion?.fallo) : null;
     const equipo = proyecto.coordinator !== 'Sin asignar' ? cargaPorCoordinador(proyecto.coordinator) : undefined;
-    const proyectosDelMismoCoordinador = proyectos.filter((p) => p.coordinator === proyecto.coordinator).length;
+    const proyectosDelMismoCoordinador = proyectosSet.filter((p) => p.coordinator === proyecto.coordinator).length;
 
     let puntos = 0;
     const razones: string[] = [];

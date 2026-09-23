@@ -2,18 +2,22 @@
 
 import { useMemo, useState } from 'react';
 import {
-  AlertTriangle, ArrowUpRight, CalendarClock, CheckCircle2,
-  CircleDollarSign, Clock3, FlaskConical, ShieldAlert, TrendingUp, WalletCards,
+  AlertTriangle, ArrowUpRight, CalendarClock, CheckCircle2, Pencil, Plus, RotateCcw, Trash2,
+  CircleDollarSign, Clock3, FlaskConical, ShieldAlert, TrendingUp, WalletCards, X,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
-  bondsPorVencer, cobranzaConsolidada, diasEntreFallo, diasParaVencer, invoices, payments,
-  proyectoPorId, proyectos, riesgoPortafolio, totalFacturado, totalPagado,
-  montoTotal, matchResultPorProyecto, type BondStatus, type RiesgoNivel,
+  bondsPorVencerDe, cobranzaConsolidada, diasEntreFallo, diasParaVencer,
+  proyectoPorId, riesgoPortafolio, totalFacturado, totalPagado,
+  montoTotal, matchResultPorProyecto, type BondStatus, type RiesgoNivel, type InvoiceStatus, type InvoiceIlustrativa, type PaymentIlustrativo,
 } from '@/lib/mock-data-finanzas-obra';
 import { fmtMXN as fmt, licitacionPorId } from '@/lib/mock-data-helpers';
+import { usePortfolio } from '@/lib/portfolio-store';
 
 const bondStatusLabel: Record<BondStatus, string> = {
   vigente: 'Vigente',
@@ -38,15 +42,29 @@ function percentage(value: number, total: number) {
   return total > 0 ? Math.round((value / total) * 100) : 0;
 }
 
+type EditingId = { kind: 'new' } | { kind: 'existing'; id: string } | null;
+type InvoiceDraft = { proyectoId: string; folio: string; amount: string; status: InvoiceStatus; issueDate: string };
+type PaymentDraft = { proyectoId: string; amount: string; paymentDate: string };
+
+function invoiceToDraft(inv: InvoiceIlustrativa): InvoiceDraft {
+  return { proyectoId: inv.proyectoId, folio: inv.folio, amount: String(inv.amount), status: inv.status, issueDate: inv.issueDate };
+}
+function paymentToDraft(p: PaymentIlustrativo): PaymentDraft {
+  return { proyectoId: p.proyectoId, amount: String(p.amount), paymentDate: p.paymentDate };
+}
+
 export function FinanzasView() {
+  const portfolio = usePortfolio();
+  const { proyectos, invoices, payments, addendas } = portfolio;
   const [portfolioFilter, setPortfolioFilter] = useState<'todos' | 'atencion'>('todos');
-  const c = useMemo(() => cobranzaConsolidada(), []);
-  const risks = useMemo(() => riesgoPortafolio(), []);
+  const bondsPorVencer = useMemo(() => bondsPorVencerDe(portfolio.bonds), [portfolio.bonds]);
+  const c = useMemo(() => cobranzaConsolidada(proyectos, invoices, payments, addendas), [proyectos, invoices, payments, addendas]);
+  const risks = useMemo(() => riesgoPortafolio(proyectos, invoices, portfolio.bonds, addendas), [proyectos, invoices, portfolio.bonds, addendas]);
 
   const projectRows = useMemo(() => proyectos.map((proyecto) => {
-    const total = montoTotal(proyecto.id);
-    const facturado = totalFacturado(proyecto.id);
-    const pagado = totalPagado(proyecto.id);
+    const total = montoTotal(proyecto.id, addendas);
+    const facturado = totalFacturado(proyecto.id, invoices);
+    const pagado = totalPagado(proyecto.id, payments);
     const pctFacturado = percentage(facturado, total);
     const balance = proyecto.progress - pctFacturado;
     const risk = risks.find((item) => item.proyecto.id === proyecto.id);
@@ -65,7 +83,7 @@ export function FinanzasView() {
       bond,
       needsAttention: risk?.nivel === 'alto' || Boolean(bond) || Math.abs(balance) > 10,
     };
-  }), [risks]);
+  }), [proyectos, invoices, payments, addendas, risks, bondsPorVencer]);
 
   const rowsToShow = portfolioFilter === 'atencion'
     ? projectRows.filter((row) => row.needsAttention)
@@ -75,6 +93,37 @@ export function FinanzasView() {
   const pagadoDeFacturadoPct = percentage(c.pagado, c.facturado);
   const pendingProjects = projectRows.filter((row) => row.pendiente > 0).length;
   const attentionCount = projectRows.filter((row) => row.needsAttention).length;
+
+  const emptyInvoiceDraft: InvoiceDraft = { proyectoId: proyectos[0]?.id ?? '', folio: '', amount: '', status: 'pendiente', issueDate: '' };
+  const emptyPaymentDraft: PaymentDraft = { proyectoId: proyectos[0]?.id ?? '', amount: '', paymentDate: '' };
+  const [invoiceEditingId, setInvoiceEditingId] = useState<EditingId>(null);
+  const [invoiceDraft, setInvoiceDraft] = useState<InvoiceDraft>(emptyInvoiceDraft);
+  const [paymentEditingId, setPaymentEditingId] = useState<EditingId>(null);
+  const [paymentDraft, setPaymentDraft] = useState<PaymentDraft>(emptyPaymentDraft);
+
+  const startNewInvoice = () => { setInvoiceDraft(emptyInvoiceDraft); setInvoiceEditingId({ kind: 'new' }); };
+  const startEditInvoice = (inv: InvoiceIlustrativa) => { setInvoiceDraft(invoiceToDraft(inv)); setInvoiceEditingId({ kind: 'existing', id: inv.id }); };
+  const cancelInvoiceEdit = () => setInvoiceEditingId(null);
+  const saveInvoice = () => {
+    const amount = Number(invoiceDraft.amount);
+    if (!invoiceDraft.proyectoId || !invoiceDraft.folio || !invoiceDraft.issueDate || !Number.isFinite(amount) || amount <= 0) return;
+    const payload = { proyectoId: invoiceDraft.proyectoId, folio: invoiceDraft.folio, amount, status: invoiceDraft.status, issueDate: invoiceDraft.issueDate };
+    if (invoiceEditingId?.kind === 'new') portfolio.addInvoice(payload);
+    else if (invoiceEditingId?.kind === 'existing') portfolio.updateInvoice(invoiceEditingId.id, payload);
+    setInvoiceEditingId(null);
+  };
+
+  const startNewPayment = () => { setPaymentDraft(emptyPaymentDraft); setPaymentEditingId({ kind: 'new' }); };
+  const startEditPayment = (p: PaymentIlustrativo) => { setPaymentDraft(paymentToDraft(p)); setPaymentEditingId({ kind: 'existing', id: p.id }); };
+  const cancelPaymentEdit = () => setPaymentEditingId(null);
+  const savePayment = () => {
+    const amount = Number(paymentDraft.amount);
+    if (!paymentDraft.proyectoId || !paymentDraft.paymentDate || !Number.isFinite(amount) || amount <= 0) return;
+    const payload = { proyectoId: paymentDraft.proyectoId, amount, paymentDate: paymentDraft.paymentDate };
+    if (paymentEditingId?.kind === 'new') portfolio.addPayment(payload);
+    else if (paymentEditingId?.kind === 'existing') portfolio.updatePayment(paymentEditingId.id, payload);
+    setPaymentEditingId(null);
+  };
 
   return <div className="concept-view finance-view">
     <div className="concept-page-heading finanzas-page-heading">
@@ -185,14 +234,100 @@ export function FinanzasView() {
 
     <div className="finanzas-transactions-grid">
       <Card className="executive-card finance-panel">
-        <CardHeader><div><CardTitle>Facturas emitidas</CardTitle><p>{invoices.length} movimientos · {fmt(c.facturado)} acumulado</p></div><Badge className="finance-count-badge" variant="outline">{invoices.filter((item) => item.status === 'facturado').length} por cobrar</Badge></CardHeader>
-        <CardContent className="finance-table-content"><div className="finance-table-scroll"><Table className="finanzas-table finance-compact-table"><TableHeader><TableRow><TableHead>Proyecto</TableHead><TableHead>Folio</TableHead><TableHead>Monto</TableHead><TableHead>Estado</TableHead><TableHead>Emisión</TableHead></TableRow></TableHeader><TableBody>{invoices.map((inv) => <TableRow key={inv.id}><TableCell>{proyectoPorId(inv.proyectoId).name}</TableCell><TableCell>{inv.folio}</TableCell><TableCell><strong>{fmt(inv.amount)}</strong></TableCell><TableCell><Badge variant="outline" className={`finance-invoice-${inv.status}`}>{invoiceStatusLabel[inv.status]}</Badge></TableCell><TableCell>{inv.issueDate}</TableCell></TableRow>)}</TableBody></Table></div></CardContent>
+        <CardHeader>
+          <div><CardTitle>Facturas emitidas</CardTitle><p>{invoices.length} movimientos · {fmt(c.facturado)} acumulado</p></div>
+          <div className="finance-crud-actions">
+            {portfolio.isDirty && <Button variant="ghost" size="sm" onClick={portfolio.resetToBase} aria-label="Restablecer datos ilustrativos originales"><RotateCcw />Restablecer</Button>}
+            <Button variant="outline" size="sm" onClick={startNewInvoice}><Plus />Agregar factura</Button>
+          </div>
+        </CardHeader>
+        <CardContent className="finance-table-content">
+          {invoiceEditingId?.kind === 'new' && <InvoiceForm draft={invoiceDraft} setDraft={setInvoiceDraft} proyectos={proyectos} onSave={saveInvoice} onCancel={cancelInvoiceEdit} />}
+          <div className="finance-table-scroll"><Table className="finanzas-table finance-compact-table"><TableHeader><TableRow><TableHead>Proyecto</TableHead><TableHead>Folio</TableHead><TableHead>Monto</TableHead><TableHead>Estado</TableHead><TableHead>Emisión</TableHead><TableHead aria-label="Acciones" /></TableRow></TableHeader><TableBody>{invoices.map((inv) => invoiceEditingId?.kind === 'existing' && invoiceEditingId.id === inv.id
+            ? <TableRow key={inv.id}><TableCell colSpan={6}><InvoiceForm draft={invoiceDraft} setDraft={setInvoiceDraft} proyectos={proyectos} onSave={saveInvoice} onCancel={cancelInvoiceEdit} /></TableCell></TableRow>
+            : <TableRow key={inv.id}>
+              <TableCell>{proyectoPorId(inv.proyectoId).name}</TableCell>
+              <TableCell>{inv.folio}</TableCell>
+              <TableCell><strong>{fmt(inv.amount)}</strong></TableCell>
+              <TableCell><Badge variant="outline" className={`finance-invoice-${inv.status}`}>{invoiceStatusLabel[inv.status]}</Badge></TableCell>
+              <TableCell>{inv.issueDate}</TableCell>
+              <TableCell><div className="finance-row-actions">
+                <button type="button" aria-label={`Editar factura ${inv.folio}`} onClick={() => startEditInvoice(inv)}><Pencil /></button>
+                <button type="button" aria-label={`Eliminar factura ${inv.folio}`} onClick={() => portfolio.removeInvoice(inv.id)}><Trash2 /></button>
+              </div></TableCell>
+            </TableRow>)}</TableBody></Table></div>
+        </CardContent>
       </Card>
 
       <Card className="executive-card finance-panel">
-        <CardHeader><div><CardTitle>Pagos recibidos</CardTitle><p>{payments.length} movimientos · {fmt(c.pagado)} cobrados</p></div><Badge className="finance-count-badge" variant="outline"><CheckCircle2 aria-hidden="true" /> Conciliados</Badge></CardHeader>
-        <CardContent className="finance-table-content"><div className="finance-table-scroll"><Table className="finanzas-table finance-compact-table"><TableHeader><TableRow><TableHead>Proyecto</TableHead><TableHead>Monto</TableHead><TableHead>Fecha de pago</TableHead></TableRow></TableHeader><TableBody>{payments.map((payment) => <TableRow key={payment.id}><TableCell>{proyectoPorId(payment.proyectoId).name}</TableCell><TableCell><strong>{fmt(payment.amount)}</strong></TableCell><TableCell>{payment.paymentDate}</TableCell></TableRow>)}</TableBody></Table></div></CardContent>
+        <CardHeader>
+          <div><CardTitle>Pagos recibidos</CardTitle><p>{payments.length} movimientos · {fmt(c.pagado)} cobrados</p></div>
+          <div className="finance-crud-actions"><Button variant="outline" size="sm" onClick={startNewPayment}><Plus />Agregar pago</Button></div>
+        </CardHeader>
+        <CardContent className="finance-table-content">
+          {paymentEditingId?.kind === 'new' && <PaymentForm draft={paymentDraft} setDraft={setPaymentDraft} proyectos={proyectos} onSave={savePayment} onCancel={cancelPaymentEdit} />}
+          <div className="finance-table-scroll"><Table className="finanzas-table finance-compact-table"><TableHeader><TableRow><TableHead>Proyecto</TableHead><TableHead>Monto</TableHead><TableHead>Fecha de pago</TableHead><TableHead aria-label="Acciones" /></TableRow></TableHeader><TableBody>{payments.map((payment) => paymentEditingId?.kind === 'existing' && paymentEditingId.id === payment.id
+            ? <TableRow key={payment.id}><TableCell colSpan={4}><PaymentForm draft={paymentDraft} setDraft={setPaymentDraft} proyectos={proyectos} onSave={savePayment} onCancel={cancelPaymentEdit} /></TableCell></TableRow>
+            : <TableRow key={payment.id}>
+              <TableCell>{proyectoPorId(payment.proyectoId).name}</TableCell>
+              <TableCell><strong>{fmt(payment.amount)}</strong></TableCell>
+              <TableCell>{payment.paymentDate}</TableCell>
+              <TableCell><div className="finance-row-actions">
+                <button type="button" aria-label="Editar pago" onClick={() => startEditPayment(payment)}><Pencil /></button>
+                <button type="button" aria-label="Eliminar pago" onClick={() => portfolio.removePayment(payment.id)}><Trash2 /></button>
+              </div></TableCell>
+            </TableRow>)}</TableBody></Table></div>
+        </CardContent>
       </Card>
     </div>
+    <p className="finance-crud-note"><FlaskConical aria-hidden="true" />Agregar, editar o eliminar aquí actualiza cobranza, riesgo y el resumen ejecutivo en vivo — pero solo en esta sesión del navegador, no queda guardado en ningún sistema.</p>
   </div>;
+}
+
+function InvoiceForm({ draft, setDraft, proyectos, onSave, onCancel }: {
+  draft: InvoiceDraft; setDraft: (d: InvoiceDraft) => void; proyectos: { id: string; name: string }[]; onSave: () => void; onCancel: () => void;
+}) {
+  return <form className="finance-crud-form" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
+    <div className="finance-crud-field">
+      <label htmlFor="invoice-proyecto">Proyecto</label>
+      <Select value={draft.proyectoId} onValueChange={(value) => setDraft({ ...draft, proyectoId: value as string })}>
+        <SelectTrigger id="invoice-proyecto"><SelectValue /></SelectTrigger>
+        <SelectContent>{proyectos.map((p) => <SelectItem value={p.id} key={p.id}>{p.name}</SelectItem>)}</SelectContent>
+      </Select>
+    </div>
+    <div className="finance-crud-field"><label htmlFor="invoice-folio">Folio</label><Input id="invoice-folio" value={draft.folio} onChange={(e) => setDraft({ ...draft, folio: e.target.value })} placeholder="F-2026-0000" /></div>
+    <div className="finance-crud-field"><label htmlFor="invoice-amount">Monto</label><Input id="invoice-amount" type="number" min="0" value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} placeholder="0" /></div>
+    <div className="finance-crud-field">
+      <label htmlFor="invoice-status">Estado</label>
+      <Select value={draft.status} onValueChange={(value) => setDraft({ ...draft, status: value as InvoiceStatus })}>
+        <SelectTrigger id="invoice-status"><SelectValue /></SelectTrigger>
+        <SelectContent>{(Object.keys(invoiceStatusLabel) as InvoiceStatus[]).map((s) => <SelectItem value={s} key={s}>{invoiceStatusLabel[s]}</SelectItem>)}</SelectContent>
+      </Select>
+    </div>
+    <div className="finance-crud-field"><label htmlFor="invoice-date">Emisión</label><Input id="invoice-date" value={draft.issueDate} onChange={(e) => setDraft({ ...draft, issueDate: e.target.value })} placeholder="10 sep 2026" /></div>
+    <div className="finance-crud-form-actions">
+      <Button type="submit" size="sm">Guardar</Button>
+      <Button type="button" variant="ghost" size="sm" onClick={onCancel}><X />Cancelar</Button>
+    </div>
+  </form>;
+}
+
+function PaymentForm({ draft, setDraft, proyectos, onSave, onCancel }: {
+  draft: PaymentDraft; setDraft: (d: PaymentDraft) => void; proyectos: { id: string; name: string }[]; onSave: () => void; onCancel: () => void;
+}) {
+  return <form className="finance-crud-form" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
+    <div className="finance-crud-field">
+      <label htmlFor="payment-proyecto">Proyecto</label>
+      <Select value={draft.proyectoId} onValueChange={(value) => setDraft({ ...draft, proyectoId: value as string })}>
+        <SelectTrigger id="payment-proyecto"><SelectValue /></SelectTrigger>
+        <SelectContent>{proyectos.map((p) => <SelectItem value={p.id} key={p.id}>{p.name}</SelectItem>)}</SelectContent>
+      </Select>
+    </div>
+    <div className="finance-crud-field"><label htmlFor="payment-amount">Monto</label><Input id="payment-amount" type="number" min="0" value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} placeholder="0" /></div>
+    <div className="finance-crud-field"><label htmlFor="payment-date">Fecha de pago</label><Input id="payment-date" value={draft.paymentDate} onChange={(e) => setDraft({ ...draft, paymentDate: e.target.value })} placeholder="10 sep 2026" /></div>
+    <div className="finance-crud-form-actions">
+      <Button type="submit" size="sm">Guardar</Button>
+      <Button type="button" variant="ghost" size="sm" onClick={onCancel}><X />Cancelar</Button>
+    </div>
+  </form>;
 }

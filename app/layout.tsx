@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { JetBrains_Mono, Manrope } from 'next/font/google';
 import './globals.css';
 import './operational-design.css';
+import { PortfolioProvider } from '@/lib/portfolio-store';
 
 const manrope = Manrope({
   variable: '--font-manrope',
@@ -31,7 +32,7 @@ export default function RootLayout({
       <body
         className={`${manrope.variable} ${jetbrainsMono.variable} antialiased`}
       >
-        {children}
+        <PortfolioProvider>{children}</PortfolioProvider>
       </body>
     </html>
   );
