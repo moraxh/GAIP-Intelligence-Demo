@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Banknote,
   Building2,
@@ -11,27 +11,36 @@ import {
   FileCheck2,
   FileText,
   Link2,
+  Pencil,
+  Plus,
+  RotateCcw,
   ShieldAlert,
   Target,
+  Trash2,
   Users,
   WalletCards,
+  X,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  bonds,
   cobranzaConsolidada,
   diasParaVencer,
   matchResultPorProyecto,
   montoTotal,
-  proyectos,
   semaforoDesfase,
   totalFacturado,
   totalPagado,
-  weeklyGoals,
+  type BondIlustrativo,
   type BondStatus,
+  type BondType,
   type SemaforoDesfase,
+  type WeeklyGoalIlustrativo,
 } from '@/lib/mock-data-finanzas-obra';
 import { fmtMXN, licitacionPorId } from '@/lib/mock-data-helpers';
+import { usePortfolio } from '@/lib/portfolio-store';
 
 const semaforoLabel: Record<SemaforoDesfase, string> = {
   alineado: 'Alineado',
@@ -67,6 +76,25 @@ function boundedPercent(value: number): number {
   return Math.max(0, Math.min(100, value));
 }
 
+const bondTypeLabel: Record<BondType, string> = {
+  cumplimiento: 'Cumplimiento',
+  anticipo: 'Anticipo',
+  vicios_ocultos: 'Vicios ocultos',
+  otro: 'Otro',
+};
+const bondStatusOptions: BondStatus[] = ['vigente', 'por_vencer', 'vencida', 'liberada'];
+
+type EditingId = { kind: 'new' } | { kind: 'existing'; id: string } | null;
+type BondDraft = { proyectoId: string; type: BondType; insurer: string; policyNumber: string; expiryDate: string; status: BondStatus };
+type GoalDraft = { proyectoId: string; weekStart: string; objetivo: string; completadoPct: string };
+
+function bondToDraft(bond: BondIlustrativo): BondDraft {
+  return { proyectoId: bond.proyectoId, type: bond.type, insurer: bond.insurer, policyNumber: bond.policyNumber, expiryDate: bond.expiryDate, status: bond.status };
+}
+function goalToDraft(goal: WeeklyGoalIlustrativo): GoalDraft {
+  return { proyectoId: goal.proyectoId, weekStart: goal.weekStart, objetivo: goal.objetivo, completadoPct: String(goal.completadoPct) };
+}
+
 function ProgressLine({ value, tone }: { value: number; tone: 'physical' | 'billing' | 'gantt' }) {
   return <div className={`obra-track obra-track-${tone}`} aria-hidden="true">
     <i style={{ width: `${boundedPercent(value)}%` }} />
@@ -74,14 +102,17 @@ function ProgressLine({ value, tone }: { value: number; tone: 'physical' | 'bill
 }
 
 export function ObraView() {
+  const portfolio = usePortfolio();
+  const { proyectos, bonds, weeklyGoals } = portfolio;
+
   const filas = useMemo(() => proyectos.map((proyecto) => {
     const match = matchResultPorProyecto(proyecto.id);
     const licitacion = match?.licitacionId ? licitacionPorId(match.licitacionId) : undefined;
-    const total = montoTotal(proyecto.id);
-    const facturado = totalFacturado(proyecto.id);
-    const pagado = totalPagado(proyecto.id);
+    const total = montoTotal(proyecto.id, portfolio.addendas);
+    const facturado = totalFacturado(proyecto.id, portfolio.invoices);
+    const pagado = totalPagado(proyecto.id, portfolio.payments);
     const gantt = avanceGantt(match?.licitacionId);
-    const { desfase, nivel } = semaforoDesfase(proyecto.id);
+    const { desfase, nivel } = semaforoDesfase(proyecto.id, portfolio.invoices, portfolio.addendas);
     const fianza = bonds.find((bond) => bond.proyectoId === proyecto.id);
     const tareasAbiertas = licitacion?.tareas?.filter((tarea) => tarea.avance < 100) ?? [];
 
@@ -99,9 +130,12 @@ export function ObraView() {
       fianza,
       tareasAbiertas,
     };
-  }), []);
+  }), [proyectos, bonds, portfolio.addendas, portfolio.invoices, portfolio.payments]);
 
-  const cobranza = useMemo(() => cobranzaConsolidada(), []);
+  const cobranza = useMemo(
+    () => cobranzaConsolidada(portfolio.proyectos, portfolio.invoices, portfolio.payments, portfolio.addendas),
+    [portfolio.proyectos, portfolio.invoices, portfolio.payments, portfolio.addendas],
+  );
   const alertas = filas.filter((fila) => fila.nivel !== 'alineado');
   const promedioFisico = filas.length
     ? Math.round((filas.reduce((sum, fila) => sum + fila.proyecto.progress, 0) / filas.length) * 10) / 10
@@ -117,6 +151,36 @@ export function ObraView() {
     const priority = (status: BondStatus) => status === 'vencida' ? 0 : status === 'por_vencer' ? 1 : status === 'vigente' ? 2 : 3;
     return priority(a.status) - priority(b.status) || diasParaVencer(a) - diasParaVencer(b);
   });
+
+  const emptyBondDraft: BondDraft = { proyectoId: proyectos[0]?.id ?? '', type: 'cumplimiento', insurer: '', policyNumber: '', expiryDate: '', status: 'vigente' };
+  const emptyGoalDraft: GoalDraft = { proyectoId: proyectos[0]?.id ?? '', weekStart: '', objetivo: '', completadoPct: '0' };
+  const [bondEditingId, setBondEditingId] = useState<EditingId>(null);
+  const [bondDraft, setBondDraft] = useState<BondDraft>(emptyBondDraft);
+  const [goalEditingId, setGoalEditingId] = useState<EditingId>(null);
+  const [goalDraft, setGoalDraft] = useState<GoalDraft>(emptyGoalDraft);
+
+  const startNewBond = () => { setBondDraft(emptyBondDraft); setBondEditingId({ kind: 'new' }); };
+  const startEditBond = (bond: BondIlustrativo) => { setBondDraft(bondToDraft(bond)); setBondEditingId({ kind: 'existing', id: bond.id }); };
+  const cancelBondEdit = () => setBondEditingId(null);
+  const saveBond = () => {
+    if (!bondDraft.proyectoId || !bondDraft.insurer || !bondDraft.policyNumber || !bondDraft.expiryDate) return;
+    const payload = { ...bondDraft };
+    if (bondEditingId?.kind === 'new') portfolio.addBond(payload);
+    else if (bondEditingId?.kind === 'existing') portfolio.updateBond(bondEditingId.id, payload);
+    setBondEditingId(null);
+  };
+
+  const startNewGoal = () => { setGoalDraft(emptyGoalDraft); setGoalEditingId({ kind: 'new' }); };
+  const startEditGoal = (goal: WeeklyGoalIlustrativo) => { setGoalDraft(goalToDraft(goal)); setGoalEditingId({ kind: 'existing', id: goal.id }); };
+  const cancelGoalEdit = () => setGoalEditingId(null);
+  const saveGoal = () => {
+    const completadoPct = Number(goalDraft.completadoPct);
+    if (!goalDraft.proyectoId || !goalDraft.weekStart || !goalDraft.objetivo || !Number.isFinite(completadoPct)) return;
+    const payload = { proyectoId: goalDraft.proyectoId, weekStart: goalDraft.weekStart, objetivo: goalDraft.objetivo, completadoPct: Math.max(0, Math.min(100, completadoPct)) };
+    if (goalEditingId?.kind === 'new') portfolio.addWeeklyGoal(payload);
+    else if (goalEditingId?.kind === 'existing') portfolio.updateWeeklyGoal(goalEditingId.id, payload);
+    setGoalEditingId(null);
+  };
 
   return <div className="concept-view obra-view">
     <header className="concept-page-heading obra-page-heading">
@@ -212,11 +276,15 @@ export function ObraView() {
             <CardTitle>Objetivos semanales</CardTitle>
             <p>Compromisos operativos registrados para el corte.</p>
           </div>
-          <Target className="obra-card-icon" />
+          <Button variant="outline" size="sm" onClick={startNewGoal}><Plus />Agregar</Button>
         </CardHeader>
         <CardContent className="obra-goal-list">
+          {goalEditingId?.kind === 'new' && <GoalForm draft={goalDraft} setDraft={setGoalDraft} proyectos={proyectos} onSave={saveGoal} onCancel={cancelGoalEdit} />}
           {weeklyGoals.map((goal) => {
             const proyecto = proyectos.find((item) => item.id === goal.proyectoId);
+            if (goalEditingId?.kind === 'existing' && goalEditingId.id === goal.id) {
+              return <GoalForm key={goal.id} draft={goalDraft} setDraft={setGoalDraft} proyectos={proyectos} onSave={saveGoal} onCancel={cancelGoalEdit} />;
+            }
             return <article className="obra-goal-row" key={goal.id}>
               <div className="obra-goal-date"><strong>{goal.weekStart.slice(0, 2)}</strong><span>{goal.weekStart.slice(3, 6).toUpperCase()}</span></div>
               <div className="obra-goal-copy">
@@ -225,9 +293,13 @@ export function ObraView() {
                 <ProgressLine value={goal.completadoPct} tone="physical" />
               </div>
               <b>{formatPercent(goal.completadoPct)}</b>
+              <div className="obra-row-actions">
+                <button type="button" aria-label={`Editar objetivo ${goal.objetivo}`} onClick={() => startEditGoal(goal)}><Pencil /></button>
+                <button type="button" aria-label={`Eliminar objetivo ${goal.objetivo}`} onClick={() => portfolio.removeWeeklyGoal(goal.id)}><Trash2 /></button>
+              </div>
             </article>;
           })}
-          {!weeklyGoals.length && <div className="obra-empty-state"><Target /><span>No hay objetivos registrados para este corte.</span></div>}
+          {!weeklyGoals.length && goalEditingId?.kind !== 'new' && <div className="obra-empty-state"><Target /><span>No hay objetivos registrados para este corte.</span></div>}
         </CardContent>
       </Card>
 
@@ -257,12 +329,19 @@ export function ObraView() {
             <CardTitle>Fianzas y fechas críticas</CardTitle>
             <p>Vencimientos contractuales asociados a cada proyecto.</p>
           </div>
-          <ShieldAlert className="obra-card-icon" />
+          <div className="obra-crud-actions">
+            {portfolio.isDirty && <Button variant="ghost" size="sm" onClick={portfolio.resetToBase} aria-label="Restablecer datos ilustrativos originales"><RotateCcw />Restablecer</Button>}
+            <Button variant="outline" size="sm" onClick={startNewBond}><Plus />Agregar</Button>
+          </div>
         </CardHeader>
         <CardContent className="obra-bond-list">
+          {bondEditingId?.kind === 'new' && <BondForm draft={bondDraft} setDraft={setBondDraft} proyectos={proyectos} onSave={saveBond} onCancel={cancelBondEdit} />}
           {fianzasOrdenadas.map((bond) => {
             const proyecto = proyectos.find((item) => item.id === bond.proyectoId);
             const dias = diasParaVencer(bond);
+            if (bondEditingId?.kind === 'existing' && bondEditingId.id === bond.id) {
+              return <BondForm key={bond.id} draft={bondDraft} setDraft={setBondDraft} proyectos={proyectos} onSave={saveBond} onCancel={cancelBondEdit} />;
+            }
             return <article className={`obra-bond-row obra-bond-${bond.status}`} key={bond.id}>
               <div className="obra-bond-icon"><ShieldAlert /></div>
               <div className="obra-bond-copy">
@@ -270,8 +349,13 @@ export function ObraView() {
                 <span>{bond.insurer} · {bond.policyNumber}</span>
               </div>
               <div className="obra-bond-date"><strong>{bond.expiryDate}</strong><span>{bond.status === 'por_vencer' || bond.status === 'vencida' ? `${Math.abs(dias)} días ${dias < 0 ? 'vencida' : 'restantes'}` : bondStatusLabel[bond.status]}</span></div>
+              <div className="obra-row-actions">
+                <button type="button" aria-label={`Editar fianza de ${proyecto?.name}`} onClick={() => startEditBond(bond)}><Pencil /></button>
+                <button type="button" aria-label={`Eliminar fianza de ${proyecto?.name}`} onClick={() => portfolio.removeBond(bond.id)}><Trash2 /></button>
+              </div>
             </article>;
           })}
+          {!fianzasOrdenadas.length && bondEditingId?.kind !== 'new' && <div className="obra-empty-state"><ShieldAlert /><span>No hay fianzas registradas.</span></div>}
         </CardContent>
       </Card>
       <Card className="executive-card obra-tasks-card">
@@ -292,5 +376,62 @@ export function ObraView() {
       </Card>
       </div>
     </div>
+    <p className="finance-crud-note"><ShieldAlert aria-hidden="true" />Agregar, editar o eliminar fianzas u objetivos aquí actualiza el ranking de riesgo y el resumen ejecutivo en vivo — pero solo en esta sesión del navegador, no queda guardado en ningún sistema.</p>
   </div>;
+}
+
+function BondForm({ draft, setDraft, proyectos, onSave, onCancel }: {
+  draft: BondDraft; setDraft: (d: BondDraft) => void; proyectos: { id: string; name: string }[]; onSave: () => void; onCancel: () => void;
+}) {
+  return <form className="finance-crud-form" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
+    <div className="finance-crud-field">
+      <label htmlFor="bond-proyecto">Proyecto</label>
+      <Select value={draft.proyectoId} onValueChange={(value) => setDraft({ ...draft, proyectoId: value as string })}>
+        <SelectTrigger id="bond-proyecto"><SelectValue /></SelectTrigger>
+        <SelectContent>{proyectos.map((p) => <SelectItem value={p.id} key={p.id}>{p.name}</SelectItem>)}</SelectContent>
+      </Select>
+    </div>
+    <div className="finance-crud-field">
+      <label htmlFor="bond-type">Tipo</label>
+      <Select value={draft.type} onValueChange={(value) => setDraft({ ...draft, type: value as BondType })}>
+        <SelectTrigger id="bond-type"><SelectValue /></SelectTrigger>
+        <SelectContent>{(Object.keys(bondTypeLabel) as BondType[]).map((t) => <SelectItem value={t} key={t}>{bondTypeLabel[t]}</SelectItem>)}</SelectContent>
+      </Select>
+    </div>
+    <div className="finance-crud-field"><label htmlFor="bond-insurer">Aseguradora</label><Input id="bond-insurer" value={draft.insurer} onChange={(e) => setDraft({ ...draft, insurer: e.target.value })} placeholder="Fianzas Guardiana" /></div>
+    <div className="finance-crud-field"><label htmlFor="bond-policy">Póliza</label><Input id="bond-policy" value={draft.policyNumber} onChange={(e) => setDraft({ ...draft, policyNumber: e.target.value })} placeholder="FG-2026-0000" /></div>
+    <div className="finance-crud-field"><label htmlFor="bond-expiry">Vence</label><Input id="bond-expiry" value={draft.expiryDate} onChange={(e) => setDraft({ ...draft, expiryDate: e.target.value })} placeholder="10 sep 2026" /></div>
+    <div className="finance-crud-field">
+      <label htmlFor="bond-status">Estatus</label>
+      <Select value={draft.status} onValueChange={(value) => setDraft({ ...draft, status: value as BondStatus })}>
+        <SelectTrigger id="bond-status"><SelectValue /></SelectTrigger>
+        <SelectContent>{bondStatusOptions.map((s) => <SelectItem value={s} key={s}>{bondStatusLabel[s]}</SelectItem>)}</SelectContent>
+      </Select>
+    </div>
+    <div className="finance-crud-form-actions">
+      <Button type="submit" size="sm">Guardar</Button>
+      <Button type="button" variant="ghost" size="sm" onClick={onCancel}><X />Cancelar</Button>
+    </div>
+  </form>;
+}
+
+function GoalForm({ draft, setDraft, proyectos, onSave, onCancel }: {
+  draft: GoalDraft; setDraft: (d: GoalDraft) => void; proyectos: { id: string; name: string }[]; onSave: () => void; onCancel: () => void;
+}) {
+  return <form className="finance-crud-form" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
+    <div className="finance-crud-field">
+      <label htmlFor="goal-proyecto">Proyecto</label>
+      <Select value={draft.proyectoId} onValueChange={(value) => setDraft({ ...draft, proyectoId: value as string })}>
+        <SelectTrigger id="goal-proyecto"><SelectValue /></SelectTrigger>
+        <SelectContent>{proyectos.map((p) => <SelectItem value={p.id} key={p.id}>{p.name}</SelectItem>)}</SelectContent>
+      </Select>
+    </div>
+    <div className="finance-crud-field"><label htmlFor="goal-week">Semana</label><Input id="goal-week" value={draft.weekStart} onChange={(e) => setDraft({ ...draft, weekStart: e.target.value })} placeholder="15 sep 2026" /></div>
+    <div className="finance-crud-field"><label htmlFor="goal-objetivo">Objetivo</label><Input id="goal-objetivo" value={draft.objetivo} onChange={(e) => setDraft({ ...draft, objetivo: e.target.value })} placeholder="Colado de losa" /></div>
+    <div className="finance-crud-field"><label htmlFor="goal-pct">Completado %</label><Input id="goal-pct" type="number" min="0" max="100" value={draft.completadoPct} onChange={(e) => setDraft({ ...draft, completadoPct: e.target.value })} /></div>
+    <div className="finance-crud-form-actions">
+      <Button type="submit" size="sm">Guardar</Button>
+      <Button type="button" variant="ghost" size="sm" onClick={onCancel}><X />Cancelar</Button>
+    </div>
+  </form>;
 }

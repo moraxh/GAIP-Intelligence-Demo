@@ -14,9 +14,9 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import {
   invoices as invoicesBase, payments as paymentsBase, bonds as bondsBase,
-  proyectos as proyectosBase, addendas as addendasBase,
+  proyectos as proyectosBase, addendas as addendasBase, weeklyGoals as weeklyGoalsBase,
   type InvoiceIlustrativa, type PaymentIlustrativo, type BondIlustrativo,
-  type ProyectoIlustrativo, type AddendaIlustrativa,
+  type ProyectoIlustrativo, type AddendaIlustrativa, type WeeklyGoalIlustrativo,
 } from '@/lib/mock-data-finanzas-obra';
 
 type PortfolioState = {
@@ -25,6 +25,7 @@ type PortfolioState = {
   payments: PaymentIlustrativo[];
   bonds: BondIlustrativo[];
   addendas: AddendaIlustrativa[];
+  weeklyGoals: WeeklyGoalIlustrativo[];
 };
 
 type PortfolioActions = {
@@ -34,7 +35,16 @@ type PortfolioActions = {
   addPayment: (payment: Omit<PaymentIlustrativo, 'id'>) => void;
   updatePayment: (id: string, patch: Partial<Omit<PaymentIlustrativo, 'id'>>) => void;
   removePayment: (id: string) => void;
+  addProyecto: (proyecto: Omit<ProyectoIlustrativo, 'id'>) => void;
+  updateProyecto: (id: string, patch: Partial<Omit<ProyectoIlustrativo, 'id'>>) => void;
+  removeProyecto: (id: string) => void;
   updateProyectoProgress: (proyectoId: string, progress: number) => void;
+  addBond: (bond: Omit<BondIlustrativo, 'id'>) => void;
+  updateBond: (id: string, patch: Partial<Omit<BondIlustrativo, 'id'>>) => void;
+  removeBond: (id: string) => void;
+  addWeeklyGoal: (goal: Omit<WeeklyGoalIlustrativo, 'id'>) => void;
+  updateWeeklyGoal: (id: string, patch: Partial<Omit<WeeklyGoalIlustrativo, 'id'>>) => void;
+  removeWeeklyGoal: (id: string) => void;
   resetToBase: () => void;
 };
 
@@ -51,7 +61,8 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const [proyectos, setProyectos] = useState(proyectosBase);
   const [invoices, setInvoices] = useState(invoicesBase);
   const [payments, setPayments] = useState(paymentsBase);
-  const [bonds] = useState(bondsBase);
+  const [bonds, setBonds] = useState(bondsBase);
+  const [weeklyGoals, setWeeklyGoals] = useState(weeklyGoalsBase);
   const [addendas] = useState(addendasBase);
   const [isDirty, setIsDirty] = useState(false);
 
@@ -61,6 +72,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     payments,
     bonds,
     addendas,
+    weeklyGoals,
     isDirty,
     addInvoice: (invoice) => {
       setInvoices((prev) => [...prev, { ...invoice, id: generateId('inv') }]);
@@ -86,17 +98,62 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       setPayments((prev) => prev.filter((item) => item.id !== id));
       setIsDirty(true);
     },
+    addProyecto: (proyecto) => {
+      setProyectos((prev) => [...prev, { ...proyecto, id: generateId('proj') }]);
+      setIsDirty(true);
+    },
+    updateProyecto: (id, patch) => {
+      setProyectos((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+      setIsDirty(true);
+    },
+    removeProyecto: (id) => {
+      setProyectos((prev) => prev.filter((item) => item.id !== id));
+      // Un proyecto eliminado deja huérfanas sus facturas/pagos/fianzas/objetivos — se
+      // limpian en cascada para que la cobranza y el ranking de riesgo no sigan sumando
+      // movimientos de un proyecto que ya no existe.
+      setInvoices((prev) => prev.filter((item) => item.proyectoId !== id));
+      setPayments((prev) => prev.filter((item) => item.proyectoId !== id));
+      setBonds((prev) => prev.filter((item) => item.proyectoId !== id));
+      setWeeklyGoals((prev) => prev.filter((item) => item.proyectoId !== id));
+      setIsDirty(true);
+    },
     updateProyectoProgress: (proyectoId, progress) => {
       setProyectos((prev) => prev.map((item) => (item.id === proyectoId ? { ...item, progress } : item)));
+      setIsDirty(true);
+    },
+    addBond: (bond) => {
+      setBonds((prev) => [...prev, { ...bond, id: generateId('bond') }]);
+      setIsDirty(true);
+    },
+    updateBond: (id, patch) => {
+      setBonds((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+      setIsDirty(true);
+    },
+    removeBond: (id) => {
+      setBonds((prev) => prev.filter((item) => item.id !== id));
+      setIsDirty(true);
+    },
+    addWeeklyGoal: (goal) => {
+      setWeeklyGoals((prev) => [...prev, { ...goal, id: generateId('wg') }]);
+      setIsDirty(true);
+    },
+    updateWeeklyGoal: (id, patch) => {
+      setWeeklyGoals((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+      setIsDirty(true);
+    },
+    removeWeeklyGoal: (id) => {
+      setWeeklyGoals((prev) => prev.filter((item) => item.id !== id));
       setIsDirty(true);
     },
     resetToBase: () => {
       setProyectos(proyectosBase);
       setInvoices(invoicesBase);
       setPayments(paymentsBase);
+      setBonds(bondsBase);
+      setWeeklyGoals(weeklyGoalsBase);
       setIsDirty(false);
     },
-  }), [proyectos, invoices, payments, bonds, addendas, isDirty]);
+  }), [proyectos, invoices, payments, bonds, weeklyGoals, addendas, isDirty]);
 
   return <PortfolioContext.Provider value={value}>{children}</PortfolioContext.Provider>;
 }
