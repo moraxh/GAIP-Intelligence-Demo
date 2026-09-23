@@ -41,6 +41,7 @@ import {
 } from '@/lib/mock-data-finanzas-obra';
 import { fmtMXN, licitacionPorId } from '@/lib/mock-data-helpers';
 import { usePortfolio } from '@/lib/portfolio-store';
+import { ProyectoDialog, emptyProyectoDraft, type ProyectoDraft } from '@/components/dashboard/proyecto-dialog';
 
 const semaforoLabel: Record<SemaforoDesfase, string> = {
   alineado: 'Alineado',
@@ -182,6 +183,24 @@ export function ObraView() {
     setGoalEditingId(null);
   };
 
+  const [proyectoEditingId, setProyectoEditingId] = useState<EditingId>(null);
+  const [proyectoDraft, setProyectoDraft] = useState<ProyectoDraft>(emptyProyectoDraft);
+  const startNewProyecto = () => { setProyectoDraft(emptyProyectoDraft); setProyectoEditingId({ kind: 'new' }); };
+  const cancelProyectoEdit = () => setProyectoEditingId(null);
+  const saveProyecto = () => {
+    const progress = Number(proyectoDraft.progress);
+    const contractAmount = Number(proyectoDraft.contractAmount);
+    if (!proyectoDraft.name || !proyectoDraft.client || !proyectoDraft.contractStart || !proyectoDraft.contractEnd
+      || !Number.isFinite(progress) || !Number.isFinite(contractAmount) || contractAmount <= 0) return;
+    const payload = {
+      name: proyectoDraft.name, client: proyectoDraft.client, status: proyectoDraft.status,
+      progress: Math.max(0, Math.min(100, progress)), coordinator: proyectoDraft.coordinator || 'Sin asignar',
+      contractAmount, contractStart: proyectoDraft.contractStart, contractEnd: proyectoDraft.contractEnd,
+    };
+    if (proyectoEditingId?.kind === 'new') portfolio.addProyecto(payload);
+    setProyectoEditingId(null);
+  };
+
   return <div className="concept-view obra-view">
     <header className="concept-page-heading obra-page-heading">
       <div>
@@ -220,7 +239,10 @@ export function ObraView() {
           <CardTitle>Portafolio de proyectos</CardTitle>
           <p>El cruce muestra el ritmo de la obra frente a lo facturado y al Gantt administrativo.</p>
         </div>
-        <span className="obra-count-badge"><ClipboardList /> {filas.length} expedientes</span>
+        <div className="obra-crud-actions">
+          <span className="obra-count-badge"><ClipboardList /> {filas.length} expedientes</span>
+          <Button variant="outline" size="sm" onClick={startNewProyecto}><Plus />Agregar proyecto</Button>
+        </div>
       </CardHeader>
       <CardContent className="obra-project-list">
         {filas.map((fila) => <article className={`obra-project-row obra-project-${fila.nivel}`} key={fila.proyecto.id}>
@@ -371,6 +393,7 @@ export function ObraView() {
 
     <BondDialog open={bondEditingId !== null} isNew={bondEditingId?.kind === 'new'} draft={bondDraft} setDraft={setBondDraft} proyectos={proyectos} onSave={saveBond} onCancel={cancelBondEdit} />
     <GoalDialog open={goalEditingId !== null} isNew={goalEditingId?.kind === 'new'} draft={goalDraft} setDraft={setGoalDraft} proyectos={proyectos} onSave={saveGoal} onCancel={cancelGoalEdit} />
+    <ProyectoDialog open={proyectoEditingId !== null} isNew={proyectoEditingId?.kind === 'new'} draft={proyectoDraft} setDraft={setProyectoDraft} onSave={saveProyecto} onCancel={cancelProyectoEdit} />
 
     <p className="finance-crud-note"><ShieldAlert aria-hidden="true" />Agregar, editar o eliminar fianzas u objetivos aquí actualiza el ranking de riesgo y el resumen ejecutivo en vivo — pero solo en esta sesión del navegador, no queda guardado en ningún sistema.</p>
   </div>;
